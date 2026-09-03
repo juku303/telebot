@@ -89,6 +89,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .wizard-nav span{font-size:12px;color:var(--muted);font-family:var(--mono)}
 .wizard-nav button{background:none;border:none;color:var(--text);font-size:14px;font-weight:600;cursor:pointer}
 .wizard-nav button.next{color:var(--accent2)}
+.wizard-nav button.next.blocked{color:var(--muted);cursor:not-allowed}
+
+.fee-check{border-radius:14px;padding:12px 14px;margin-bottom:16px;font-size:12px;line-height:1.6}
+.fee-check.ok{background:rgba(0,229,160,.1);border:1px solid rgba(0,229,160,.3);color:var(--accent)}
+.fee-check.bad{background:rgba(255,77,106,.1);border:1px solid rgba(255,77,106,.3);color:var(--red)}
 
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 20px;font-size:13px;color:var(--text);opacity:0;transition:all .3s;z-index:999;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -207,6 +212,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="range-box"><label>Верхняя граница</label><input id="upperInput" type="number" placeholder="0.00"></div>
   </div>
 
+  <div class="range-box" style="margin-bottom:16px">
+    <label>Количество сеток</label>
+    <input id="gridCountInput" type="number" placeholder="33" value="33">
+  </div>
+
+  <div class="fee-check" id="feeCheck"></div>
+
   <div class="dir-row" id="dirRow">
     <button class="dir-pill short active" data-dir="Short">Short ↘</button>
     <button class="dir-pill long" data-dir="Long">Long ↗</button>
@@ -215,7 +227,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <div class="wizard-nav">
     <button onclick="closeRange()">‹ Назад</button>
     <span>Шаг 1 из 4</span>
-    <button class="next" onclick="confirmRangeStep()">Далее ›</button>
+    <button class="next" id="nextBtn" onclick="confirmRangeStep()">Далее ›</button>
   </div>
 </div>
 
@@ -302,7 +314,9 @@ function selectPair(symbol) {
     'Создание фьючерс бота · ' + symbol.replace('USDT', '/USDT');
   document.getElementById('lowerInput').value = '';
   document.getElementById('upperInput').value = '';
+  document.getElementById('gridCountInput').value = 33;
   renderChart(symbol);
+  checkGridFee();
 }
 
 function renderChart(symbol) {
@@ -344,7 +358,54 @@ document.getElementById('dirRow').addEventListener('click', e => {
   wizardDirection = btn.dataset.dir;
 });
 
+// Та же формула, что validateGridProfitability в gridLogic.js на сервере —
+// шаг сетки должен покрывать комиссию за ОБЕ ноги (открытие + закрытие),
+// иначе каждый цикл будет чистым убытком, даже если бот всё делает верно.
+let gridFeeOk = false;
+
+function checkGridFee() {
+  const lower = parseFloat(document.getElementById('lowerInput').value);
+  const upper = parseFloat(document.getElementById('upperInput').value);
+  const gridCount = parseInt(document.getElementById('gridCountInput').value, 10);
+  const feeRatePct = (lastPayload && lastPayload.feeRatePct != null) ? lastPayload.feeRatePct : 0.055;
+  const el = document.getElementById('feeCheck');
+  const nextBtn = document.getElementById('nextBtn');
+
+  if (!lower || !upper || !gridCount || upper <= lower) {
+    gridFeeOk = false;
+    el.className = 'fee-check';
+    el.textContent = '';
+    nextBtn.classList.remove('blocked');
+    return;
+  }
+
+  const step = (upper - lower) / gridCount;
+  const midPrice = (upper + lower) / 2;
+  const stepPct = (step / midPrice) * 100;
+  const feeRoundTripPct = 2 * feeRatePct;
+  const netMarginPct = stepPct - feeRoundTripPct;
+  gridFeeOk = netMarginPct > 0;
+
+  if (gridFeeOk) {
+    el.className = 'fee-check ok';
+    el.textContent = `✓ Шаг сетки ${stepPct.toFixed(3)}% — после комиссии (${feeRoundTripPct.toFixed(3)}% за цикл) чистая маржа ~${netMarginPct.toFixed(3)}%`;
+    nextBtn.classList.remove('blocked');
+  } else {
+    el.className = 'fee-check bad';
+    el.textContent = `✗ Слишком частая сетка: шаг ${stepPct.toFixed(3)}% меньше комиссии за цикл (${feeRoundTripPct.toFixed(3)}%). Расширьте диапазон или уменьшите число сеток.`;
+    nextBtn.classList.add('blocked');
+  }
+}
+
+['lowerInput', 'upperInput', 'gridCountInput'].forEach(id => {
+  document.getElementById(id).addEventListener('input', checkGridFee);
+});
+
 function confirmRangeStep() {
+  if (!gridFeeOk) {
+    toast('Сначала исправьте диапазон/число сеток — сетка убыточна после комиссии');
+    return;
+  }
   toast('Шаги 2–4 (плечо, объём, подтверждение) пока не реализованы');
 }
 
