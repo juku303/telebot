@@ -57,6 +57,39 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .btn-start{background:var(--accent);color:#000;border:none;border-radius:12px;padding:12px;font-family:var(--mono);font-size:13px;font-weight:700;cursor:pointer;width:100%}
 .back-row{display:flex;align-items:center;gap:10px;padding:16px 16px 4px;cursor:pointer;color:var(--muted);font-size:13px}
 
+.search-input{width:100%;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;color:var(--text);font-family:var(--sans);font-size:14px;margin-bottom:16px}
+.search-input::placeholder{color:var(--muted)}
+
+.pair-row{background:var(--card);border-radius:16px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;cursor:pointer}
+.pair-coin{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;color:#fff}
+.pair-row h3{font-size:15px;font-weight:600}
+
+.wizard-title{font-size:20px;font-weight:600;margin-bottom:16px}
+.tv-wrap{background:var(--card);border-radius:16px;overflow:hidden;margin-bottom:16px;height:280px}
+.tv-wrap #tv_chart{height:100%}
+
+.toggle-row{display:flex;background:var(--card);border-radius:14px;padding:4px;margin-bottom:16px}
+.toggle-pill{flex:1;text-align:center;padding:10px;border-radius:11px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;background:none;border:none}
+.toggle-pill.active{background:var(--accent2);color:#fff}
+
+.range-inputs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.range-box{background:var(--card);border-radius:14px;padding:12px 14px}
+.range-box label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px}
+.range-box input{width:100%;background:none;border:none;color:var(--text);font-family:var(--mono);font-size:16px;font-weight:700}
+.range-box input:focus{outline:none}
+
+.dir-row{display:flex;background:var(--card);border-radius:14px;padding:4px;margin-bottom:20px}
+.dir-pill{flex:1;text-align:center;padding:12px;border-radius:11px;font-size:14px;font-weight:600;cursor:pointer;background:none;border:none;color:var(--muted)}
+.dir-pill.short{color:var(--red)}
+.dir-pill.long{color:var(--accent2)}
+.dir-pill.short.active{background:rgba(255,77,106,.15)}
+.dir-pill.long.active{background:rgba(124,92,255,.15)}
+
+.wizard-nav{display:flex;align-items:center;justify-content:space-between;background:var(--card);border-radius:14px;padding:14px 18px}
+.wizard-nav span{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.wizard-nav button{background:none;border:none;color:var(--text);font-size:14px;font-weight:600;cursor:pointer}
+.wizard-nav button.next{color:var(--accent2)}
+
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 20px;font-size:13px;color:var(--text);opacity:0;transition:all .3s;z-index:999;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
@@ -140,6 +173,52 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   </div>
 </div>
 
+<!-- ── Мастер создания: шаг 1 — выбор валютной пары ── -->
+<div class="page" id="page-pair" style="display:none">
+  <div class="back-row" onclick="closePair()">← Назад</div>
+  <div class="wizard-title">Выбор валютной пары</div>
+  <input class="search-input" id="pairSearch" placeholder="Поиск" oninput="filterPairs(this.value)">
+  <div id="pairList">
+    <div class="pair-row" data-name="btc bitcoin биткоин" onclick="selectPair('BTCUSDT')">
+      <div class="pair-coin" style="background:#f7931a;font-size:12px">BTC</div>
+      <h3>BTC / USDT</h3>
+    </div>
+    <div class="pair-row" data-name="eth ethereum эфир эфириум" onclick="selectPair('ETHUSDT')">
+      <div class="pair-coin" style="background:#627eea;font-size:12px">ETH</div>
+      <h3>ETH / USDT</h3>
+    </div>
+  </div>
+</div>
+
+<!-- ── Мастер создания: шаг 2 — график, диапазон, направление ── -->
+<div class="page" id="page-range" style="display:none">
+  <div class="back-row" onclick="closeRange()">← Назад</div>
+  <div class="wizard-title" id="rangeTitle">Создание фьючерс бота</div>
+
+  <div class="tv-wrap"><div id="tv_chart"></div></div>
+
+  <div class="toggle-row" id="modeRow">
+    <button class="toggle-pill active" data-mode="range">Диапазон</button>
+    <button class="toggle-pill" data-mode="start">Стартовая цена</button>
+  </div>
+
+  <div class="range-inputs">
+    <div class="range-box"><label>Нижняя граница</label><input id="lowerInput" type="number" placeholder="0.00"></div>
+    <div class="range-box"><label>Верхняя граница</label><input id="upperInput" type="number" placeholder="0.00"></div>
+  </div>
+
+  <div class="dir-row" id="dirRow">
+    <button class="dir-pill short active" data-dir="Short">Short ↘</button>
+    <button class="dir-pill long" data-dir="Long">Long ↗</button>
+  </div>
+
+  <div class="wizard-nav">
+    <button onclick="closeRange()">‹ Назад</button>
+    <span>Шаг 1 из 4</span>
+    <button class="next" onclick="confirmRangeStep()">Далее ›</button>
+  </div>
+</div>
+
 <!-- ── "+" Открыть бота ── -->
 <button class="fab" onclick="openSheet()">+</button>
 <div class="fab-label">Открыть бота</div>
@@ -147,9 +226,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 <div class="sheet-backdrop" id="sheetBackdrop" onclick="closeSheet()"></div>
 <div class="sheet" id="sheet">
   <h4>Выберите тип бота</h4>
-  <div class="bot-row" onclick="closeSheet(); openFutures();">
+  <div class="bot-row" onclick="closeSheet(); openPairPicker('futures');">
     <div class="bot-icon">🤖</div>
-    <div class="bot-info"><h3>Фьючерсный бот</h3><p>ETH/USDT · Short</p></div>
+    <div class="bot-info"><h3>Фьючерсный бот</h3><p>Создать нового бота</p></div>
     <div class="chev">›</div>
   </div>
   <div class="bot-row disabled" onclick="closeSheet(); toast('Спотовый бот пока не реализован')">
@@ -161,6 +240,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 <div class="toast" id="toast"></div>
 
+<script src="https://s3.tradingview.com/tv.js"></script>
 <script>
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
@@ -184,6 +264,88 @@ function openSheet() {
 function closeSheet() {
   document.getElementById('sheetBackdrop').classList.remove('show');
   document.getElementById('sheet').classList.remove('show');
+}
+
+// ── Мастер создания бота: выбор пары → график/диапазон/направление ──
+// Пока это только интерфейс шагов 1–2 (как на скринах Bybit). Дальнейшие
+// шаги (плечо, объём, подтверждение) и реальный запуск нового бота на бирже
+// не реализованы — это отдельная задача, у нас пока один живой бот (ETH).
+let wizardBotType = 'futures';
+let wizardSymbol = null;
+let wizardDirection = 'Short';
+let wizardMode = 'range';
+let tvWidget = null;
+
+function openPairPicker(botType) {
+  wizardBotType = botType;
+  document.getElementById('pairSearch').value = '';
+  filterPairs('');
+  document.getElementById('page-list').style.display = 'none';
+  document.getElementById('page-pair').style.display = 'block';
+}
+function closePair() {
+  document.getElementById('page-pair').style.display = 'none';
+  document.getElementById('page-list').style.display = 'block';
+}
+function filterPairs(q) {
+  const query = q.trim().toLowerCase();
+  document.querySelectorAll('.pair-row').forEach(row => {
+    row.style.display = row.dataset.name.includes(query) ? 'flex' : 'none';
+  });
+}
+
+function selectPair(symbol) {
+  wizardSymbol = symbol;
+  document.getElementById('page-pair').style.display = 'none';
+  document.getElementById('page-range').style.display = 'block';
+  document.getElementById('rangeTitle').textContent =
+    'Создание фьючерс бота · ' + symbol.replace('USDT', '/USDT');
+  document.getElementById('lowerInput').value = '';
+  document.getElementById('upperInput').value = '';
+  renderChart(symbol);
+}
+
+function renderChart(symbol) {
+  document.getElementById('tv_chart').innerHTML = '';
+  tvWidget = new TradingView.widget({
+    container_id: 'tv_chart',
+    symbol: 'BYBIT:' + symbol,
+    interval: '60',
+    theme: 'dark',
+    style: '1',
+    locale: 'ru',
+    autosize: true,
+    hide_top_toolbar: true,
+    hide_legend: true,
+    allow_symbol_change: false,
+    backgroundColor: '#161618',
+    gridColor: '#232326',
+  });
+}
+
+function closeRange() {
+  document.getElementById('page-range').style.display = 'none';
+  document.getElementById('page-pair').style.display = 'block';
+}
+
+document.getElementById('modeRow').addEventListener('click', e => {
+  const btn = e.target.closest('.toggle-pill');
+  if (!btn) return;
+  document.querySelectorAll('#modeRow .toggle-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  wizardMode = btn.dataset.mode;
+});
+
+document.getElementById('dirRow').addEventListener('click', e => {
+  const btn = e.target.closest('.dir-pill');
+  if (!btn) return;
+  document.querySelectorAll('#dirRow .dir-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  wizardDirection = btn.dataset.dir;
+});
+
+function confirmRangeStep() {
+  toast('Шаги 2–4 (плечо, объём, подтверждение) пока не реализованы');
 }
 
 // Прибыль за период считается на сервере разбором bot.log (строки TRADE
