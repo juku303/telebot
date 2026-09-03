@@ -167,6 +167,7 @@ if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#000000'); tg.setBackgroun
 
 const API = 'https://trading-bot-bybit.vorotnet.kz/api/status';
 let lastPayload = null;
+let currentPeriod = '30';
 
 function openFutures() {
   document.getElementById('page-list').style.display = 'none';
@@ -185,15 +186,20 @@ function closeSheet() {
   document.getElementById('sheet').classList.remove('show');
 }
 
-// Период пока влияет только на подпись — реальной разбивки прибыли по датам
-// бот сейчас не считает, отдаётся только суммарный profit с момента запуска.
+// Прибыль за период считается на сервере разбором bot.log (строки TRADE
+// с "прибыль ~$X" пишутся только на открывающих сделках). Это оценка по
+// логу, а не тот же самый счётчик, что в "Реальная прибыль с Bybit" на
+// детальном экране — могут слегка расходиться, если лог покрывает больший
+// период, чем текущий live-счётчик состояния бота.
+const PERIOD_LABELS = { '7': '1 неделя', '30': '1 месяц', '90': '3 месяца', 'all': 'всё время' };
+
 document.getElementById('periodRow').addEventListener('click', e => {
   const btn = e.target.closest('.period-pill');
   if (!btn) return;
   document.querySelectorAll('.period-pill').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
-  const labels = { '7': '1 неделя', '30': '1 месяц', '90': '3 месяца', 'all': 'всё время' };
-  document.getElementById('pnlLbl').textContent = `Общий PnL · ${labels[btn.dataset.p]} (с запуска бота)`;
+  currentPeriod = btn.dataset.p;
+  fetchStatus();
 });
 
 function stopBot() {
@@ -207,7 +213,7 @@ function startBot() {
 
 async function fetchStatus() {
   try {
-    const r = await fetch(API);
+    const r = await fetch(API + '?days=' + currentPeriod);
     const d = await r.json();
     lastPayload = d;
     const dot = document.getElementById('dot');
@@ -233,11 +239,17 @@ async function fetchStatus() {
       document.getElementById('futuresSub').textContent = 'Остановлен · /run в Telegram';
     }
 
+    // Список ботов — прибыль за выбранный период (оценка по bot.log)
+    const periodProfit = d.periodProfit || 0;
+    document.getElementById('pnlVal').textContent = (periodProfit >= 0 ? '+' : '') + '$' + periodProfit.toFixed(2);
+    document.getElementById('pnlVal').className = 'pnl-val' + (periodProfit < 0 ? ' neg' : '');
+    document.getElementById('pnlLbl').textContent =
+      `Общий PnL · ${PERIOD_LABELS[currentPeriod]} · ${d.periodTrades || 0} сделок (по логу)`;
+
+    // Детальный экран — реальный текущий счётчик прибыли бота, без привязки к периоду
     const profit = d.profit || 0;
     const sign = (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2);
     const cls = 'pnl-val' + (profit < 0 ? ' neg' : '');
-    document.getElementById('pnlVal').textContent = sign;
-    document.getElementById('pnlVal').className = cls;
     document.getElementById('pnlValDetail').textContent = sign;
     document.getElementById('pnlValDetail').className = cls;
 
