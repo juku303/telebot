@@ -79,8 +79,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <div class="card">
     <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Параметры</div>
     <div style="font-size:12px;color:var(--muted);line-height:2">
-      Диапазон: <span style="color:var(--text)">$1800 — $2200</span><br>
-      Сеток: <span style="color:var(--text)">33</span> · Направление: <span style="color:var(--red)">Short</span> · Плечо: <span style="color:var(--text)">1x</span>
+      Диапазон: <span style="color:var(--text)" id="pRange">—</span><br>
+      Сеток: <span style="color:var(--text)" id="pGrid">—</span> · Направление: <span style="color:var(--red)" id="pDir">—</span> · Плечо: <span style="color:var(--text)" id="pLev">—</span>
     </div>
   </div>
 </div>
@@ -142,12 +142,21 @@ async function fetchStatus() {
     const d = await r.json();
     const dot = document.getElementById('dot');
     const badge = document.getElementById('liveBadge');
+
+    if (d.lowerPrice != null && d.upperPrice != null) {
+      document.getElementById('pRange').textContent = '$' + d.lowerPrice + ' — $' + d.upperPrice;
+    }
+    if (d.gridCount != null) document.getElementById('pGrid').textContent = d.gridCount;
+    if (d.direction) document.getElementById('pDir').textContent = d.direction;
+    if (d.leverage != null) document.getElementById('pLev').textContent = d.leverage + 'x';
+
     if (d.running) {
       dot.className = 'dot on';
       badge.textContent = '🟢 LIVE — реальные данные';
       badge.style.color = 'var(--accent)';
       document.getElementById('bText').textContent = 'Бот работает';
-      document.getElementById('bSub').textContent = 'ETH/USDT · Short · 33 сетки';
+      document.getElementById('bSub').textContent =
+        (d.symbol || '') + ' · ' + (d.direction || '') + ' · ' + (d.gridCount != null ? d.gridCount : '?') + ' сеток';
       document.getElementById('bIcon').textContent = '🟢';
     } else {
       dot.className = 'dot';
