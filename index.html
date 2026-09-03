@@ -7,91 +7,130 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0a0c10;--surface:#111318;--card:#161a22;--border:#1e2330;--accent:#00e5a0;--accent2:#7b61ff;--red:#ff4d6a;--text:#e8eaf0;--muted:#5a6180;--mono:'Space Mono',monospace;--sans:'DM Sans',sans-serif}
+:root{--bg:#000000;--card:#161618;--border:#232326;--accent:#00e5a0;--accent2:#7c5cff;--red:#ff4d6a;--text:#f2f2f4;--muted:#8a8a92;--mono:'Space Mono',monospace;--sans:'DM Sans',sans-serif}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
-.header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:100}
-.logo{font-family:var(--mono);font-size:13px;color:var(--accent);letter-spacing:2px}
-.pair{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--surface);padding:4px 10px;border-radius:6px;border:1px solid var(--border)}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:6px;transition:background .3s}
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px}
+.logo{font-family:var(--mono);font-size:13px;color:var(--muted);letter-spacing:2px;display:flex;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:8px;transition:background .3s}
 .dot.on{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.nav{display:flex;padding:10px 20px 0;gap:4px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
-.nav::-webkit-scrollbar{display:none}
-.tab{padding:8px 16px 10px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .2s;background:none;border-top:none;border-left:none;border-right:none}
-.tab.active{color:var(--text);border-bottom-color:var(--accent)}
-.page{display:none;padding:16px 16px 100px;animation:fadeIn .2s ease}
-.page.active{display:block}
+.pair{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--card);padding:4px 10px;border-radius:6px;border:1px solid var(--border)}
+.page{padding:0 16px 100px;animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px}
-.pnl{background:linear-gradient(135deg,#111a14,#0d1a20);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:12px}
-.pnl-val{font-family:var(--mono);font-size:32px;font-weight:700;color:var(--accent);line-height:1;margin-bottom:4px}
+
+.pnl-card{background:var(--card);border-radius:18px;padding:22px 20px;margin-bottom:16px}
+.pnl-val{font-family:var(--sans);font-size:34px;font-weight:600;color:var(--text);line-height:1;margin-bottom:6px}
 .pnl-val.neg{color:var(--red)}
-.pnl-lbl{font-size:12px;color:var(--muted)}
+.pnl-lbl{font-size:13px;color:var(--muted)}
+
+.period-row{display:flex;gap:8px;margin-bottom:16px}
+.period-pill{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--card);border:1px solid var(--border);border-radius:20px;padding:7px 14px;cursor:pointer}
+.period-pill.active{color:#000;background:var(--text);border-color:var(--text)}
+
+.bot-row{background:var(--card);border-radius:16px;padding:16px;margin-bottom:12px;display:flex;align-items:center;gap:14px;cursor:pointer}
+.bot-row.disabled{opacity:.5}
+.bot-icon{font-size:28px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:#1f1f22;border-radius:12px;flex-shrink:0}
+.bot-info{flex:1;min-width:0}
+.bot-info h3{font-size:16px;font-weight:600;margin-bottom:2px}
+.bot-info p{font-size:12px;color:var(--muted)}
+.chev{color:var(--muted);font-size:18px}
+
+.fab{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:56px;height:56px;border-radius:50%;background:var(--accent2);border:none;color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(124,92,255,.4);cursor:pointer;z-index:150}
+.fab-label{position:fixed;bottom:6px;left:50%;transform:translateX(-50%);font-size:10px;font-family:var(--mono);color:var(--muted);z-index:150}
+
+.sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:300}
+.sheet-backdrop.show{display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom));transform:translateY(100%);transition:transform .25s ease;z-index:301}
+.sheet.show{transform:translateY(0)}
+.sheet h4{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;font-family:var(--mono)}
+
+.detail-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px}
 .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .scard{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}
 .sval{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--text);line-height:1;margin-bottom:4px}
 .slbl{font-size:11px;color:var(--muted)}
-.ccard{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:12px}
-.crow{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.cinfo h3{font-size:15px;font-weight:600;margin-bottom:2px}
-.cinfo p{font-size:12px;color:var(--muted)}
+.live-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(0,229,160,.1);border:1px solid rgba(0,229,160,.3);border-radius:8px;padding:4px 10px;font-size:11px;font-family:var(--mono);color:var(--accent);margin-bottom:12px}
+.live-badge.off{background:rgba(255,77,106,.1);border-color:rgba(255,77,106,.3);color:var(--red)}
+.live-badge.stopped{background:rgba(138,138,146,.1);border-color:rgba(138,138,146,.3);color:var(--muted)}
 .btn-stop{background:transparent;color:var(--red);border:1px solid var(--red);border-radius:12px;padding:12px;font-family:var(--mono);font-size:13px;cursor:pointer;width:100%;margin-bottom:8px}
 .btn-start{background:var(--accent);color:#000;border:none;border-radius:12px;padding:12px;font-family:var(--mono);font-size:13px;font-weight:700;cursor:pointer;width:100%}
-.live-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(0,229,160,.1);border:1px solid rgba(0,229,160,.3);border-radius:8px;padding:4px 10px;font-size:11px;font-family:var(--mono);color:var(--accent);margin-bottom:12px}
-.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 20px;font-size:13px;color:var(--text);opacity:0;transition:all .3s;z-index:999;pointer-events:none;white-space:nowrap}
+.back-row{display:flex;align-items:center;gap:10px;padding:16px 16px 4px;cursor:pointer;color:var(--muted);font-size:13px}
+
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 20px;font-size:13px;color:var(--text);opacity:0;transition:all .3s;z-index:999;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.bnav{position:fixed;bottom:0;left:0;right:0;background:var(--bg);border-top:1px solid var(--border);display:flex;padding:8px 0 calc(8px + env(safe-area-inset-bottom));z-index:200}
-.bi{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;cursor:pointer;color:var(--muted);font-size:10px;font-family:var(--mono);transition:color .2s;background:none;border:none}
-.bi.active{color:var(--accent)}
-.bic{font-size:20px;line-height:1}
 </style>
 </head>
 <body>
 <div class="header">
-  <div class="logo"><span class="dot" id="dot"></span>GRID BOT</div>
+  <div class="logo"><span class="dot" id="dot"></span>БОТЫ</div>
   <div class="pair">ETH/USDT</div>
 </div>
-<div class="nav">
-  <button class="tab active" onclick="go('dashboard',this)">Дашборд</button>
-  <button class="tab" onclick="go('control',this)">Управление</button>
+
+<!-- ── Список ботов (аналог экрана Bybit "Боты") ── -->
+<div class="page" id="page-list">
+  <div class="pnl-card">
+    <div class="pnl-lbl" id="pnlLbl">Общий PnL · с запуска бота</div>
+    <div class="pnl-val" id="pnlVal">$0.00</div>
+  </div>
+
+  <div class="period-row" id="periodRow">
+    <button class="period-pill" data-p="7">1Н</button>
+    <button class="period-pill active" data-p="30">1М</button>
+    <button class="period-pill" data-p="90">3М</button>
+    <button class="period-pill" data-p="all">Всё время</button>
+  </div>
+
+  <div class="bot-row" onclick="openFutures()">
+    <div class="bot-icon">🤖</div>
+    <div class="bot-info">
+      <h3>Фьючерсный бот</h3>
+      <p id="futuresSub">Загрузка…</p>
+    </div>
+    <div class="chev">›</div>
+  </div>
+
+  <div class="bot-row disabled" onclick="toast('Спотовый бот пока не реализован')">
+    <div class="bot-icon">💠</div>
+    <div class="bot-info">
+      <h3>Спотовый бот</h3>
+      <p>Нет активных ботов</p>
+    </div>
+    <div class="chev">›</div>
+  </div>
 </div>
 
-<div class="page active" id="page-dashboard">
+<!-- ── Детали фьючерсного бота (реальное управление) ── -->
+<div class="page" id="page-futures" style="display:none">
+  <div class="back-row" onclick="closeFutures()">← Назад к ботам</div>
   <div class="live-badge" id="liveBadge">⏳ Загрузка...</div>
-  <div class="pnl">
+
+  <div class="pnl-card">
     <div class="pnl-lbl">Реальная прибыль с Bybit</div>
-    <div class="pnl-val" id="pnlVal">$0.00</div>
-    <div style="margin-top:8px;display:flex;gap:16px">
-      <span style="font-size:12px;color:var(--muted)">Uptime: <span style="color:var(--accent)" id="uptimeV">—</span></span>
-    </div>
+    <div class="pnl-val" id="pnlValDetail">$0.00</div>
+    <div style="margin-top:8px"><span style="font-size:12px;color:var(--muted)">Uptime: <span style="color:var(--accent)" id="uptimeV">—</span></span></div>
   </div>
+
   <div class="sgrid">
     <div class="scard"><div class="sval" id="sOrders">—</div><div class="slbl">Открытых ордеров</div></div>
     <div class="scard"><div class="sval" id="sFilled">—</div><div class="slbl">Исполнено сеток</div></div>
   </div>
-  <div class="ccard">
-    <div class="crow">
-      <div class="cinfo"><h3 id="bText">Загрузка...</h3><p id="bSub">Получаем данные с VPS</p></div>
-      <div style="font-size:28px" id="bIcon">⏳</div>
-    </div>
-  </div>
-  <div class="card">
+
+  <div class="detail-card">
     <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Параметры</div>
     <div style="font-size:12px;color:var(--muted);line-height:2">
       Диапазон: <span style="color:var(--text)" id="pRange">—</span><br>
       Сеток: <span style="color:var(--text)" id="pGrid">—</span> · Направление: <span style="color:var(--red)" id="pDir">—</span> · Плечо: <span style="color:var(--text)" id="pLev">—</span>
     </div>
   </div>
-</div>
 
-<div class="page" id="page-control">
-  <div class="card">
+  <div class="detail-card">
     <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px">Управление ботом</div>
     <button class="btn-stop" onclick="stopBot()">■ ОСТАНОВИТЬ БОТА</button>
     <button class="btn-start" onclick="startBot()">▶ ЗАПУСТИТЬ БОТА</button>
   </div>
-  <div class="card">
+
+  <div class="detail-card">
     <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Telegram команды</div>
     <div style="font-size:13px;color:var(--muted);line-height:2;font-family:var(--mono)">
       <span style="color:var(--accent)">/status</span> — прибыль и статус<br>
@@ -101,36 +140,66 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   </div>
 </div>
 
-<div class="bnav">
-  <button class="bi active" id="bn-dashboard" onclick="go('dashboard',null,'bn-dashboard')"><span class="bic">📊</span>ДАШБОРД</button>
-  <button class="bi" id="bn-control" onclick="go('control',null,'bn-control')"><span class="bic">⚙️</span>УПРАВЛЕНИЕ</button>
+<!-- ── "+" Открыть бота ── -->
+<button class="fab" onclick="openSheet()">+</button>
+<div class="fab-label">Открыть бота</div>
+
+<div class="sheet-backdrop" id="sheetBackdrop" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet">
+  <h4>Выберите тип бота</h4>
+  <div class="bot-row" onclick="closeSheet(); openFutures();">
+    <div class="bot-icon">🤖</div>
+    <div class="bot-info"><h3>Фьючерсный бот</h3><p>ETH/USDT · Short</p></div>
+    <div class="chev">›</div>
+  </div>
+  <div class="bot-row disabled" onclick="closeSheet(); toast('Спотовый бот пока не реализован')">
+    <div class="bot-icon">💠</div>
+    <div class="bot-info"><h3>Спотовый бот</h3><p>Нет активных ботов</p></div>
+    <div class="chev">›</div>
+  </div>
 </div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 const tg = window.Telegram?.WebApp;
-if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#0a0c10'); tg.setBackgroundColor('#0a0c10'); }
+if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
 
 const API = 'https://trading-bot-bybit.vorotnet.kz/api/status';
+let lastPayload = null;
 
-function go(n, t, b) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-  document.querySelectorAll('.bi').forEach(x => x.classList.remove('active'));
-  document.getElementById('page-' + n).classList.add('active');
-  if (t) t.classList.add('active');
-  const bn = document.getElementById(b || 'bn-' + n);
-  if (bn) bn.classList.add('active');
-  const tabs = document.querySelectorAll('.tab');
-  const ti = {dashboard: 0, control: 1};
-  if (tabs[ti[n]]) tabs[ti[n]].classList.add('active');
+function openFutures() {
+  document.getElementById('page-list').style.display = 'none';
+  document.getElementById('page-futures').style.display = 'block';
 }
+function closeFutures() {
+  document.getElementById('page-futures').style.display = 'none';
+  document.getElementById('page-list').style.display = 'block';
+}
+function openSheet() {
+  document.getElementById('sheetBackdrop').classList.add('show');
+  document.getElementById('sheet').classList.add('show');
+}
+function closeSheet() {
+  document.getElementById('sheetBackdrop').classList.remove('show');
+  document.getElementById('sheet').classList.remove('show');
+}
+
+// Период пока влияет только на подпись — реальной разбивки прибыли по датам
+// бот сейчас не считает, отдаётся только суммарный profit с момента запуска.
+document.getElementById('periodRow').addEventListener('click', e => {
+  const btn = e.target.closest('.period-pill');
+  if (!btn) return;
+  document.querySelectorAll('.period-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  const labels = { '7': '1 неделя', '30': '1 месяц', '90': '3 месяца', 'all': 'всё время' };
+  document.getElementById('pnlLbl').textContent = `Общий PnL · ${labels[btn.dataset.p]} (с запуска бота)`;
+});
 
 function stopBot() {
   if (tg) tg.sendData(JSON.stringify({cmd: 'stop'}));
   toast('⏸ Команда остановки отправлена');
 }
-
 function startBot() {
   if (tg) tg.sendData(JSON.stringify({cmd: 'start'}));
   toast('▶ Команда запуска отправлена');
@@ -140,6 +209,7 @@ async function fetchStatus() {
   try {
     const r = await fetch(API);
     const d = await r.json();
+    lastPayload = d;
     const dot = document.getElementById('dot');
     const badge = document.getElementById('liveBadge');
 
@@ -150,26 +220,27 @@ async function fetchStatus() {
     if (d.direction) document.getElementById('pDir').textContent = d.direction;
     if (d.leverage != null) document.getElementById('pLev').textContent = d.leverage + 'x';
 
+    dot.className = d.running ? 'dot on' : 'dot';
+
+    badge.classList.remove('off', 'stopped');
     if (d.running) {
-      dot.className = 'dot on';
       badge.textContent = '🟢 LIVE — реальные данные';
-      badge.style.color = 'var(--accent)';
-      document.getElementById('bText').textContent = 'Бот работает';
-      document.getElementById('bSub').textContent =
+      document.getElementById('futuresSub').textContent =
         (d.symbol || '') + ' · ' + (d.direction || '') + ' · ' + (d.gridCount != null ? d.gridCount : '?') + ' сеток';
-      document.getElementById('bIcon').textContent = '🟢';
     } else {
-      dot.className = 'dot';
       badge.textContent = '⏸ Бот остановлен';
-      badge.style.color = 'var(--muted)';
-      document.getElementById('bText').textContent = 'Бот остановлен';
-      document.getElementById('bSub').textContent = 'Используй /run в Telegram';
-      document.getElementById('bIcon').textContent = '⏸';
+      badge.classList.add('stopped');
+      document.getElementById('futuresSub').textContent = 'Остановлен · /run в Telegram';
     }
+
     const profit = d.profit || 0;
-    const el = document.getElementById('pnlVal');
-    el.textContent = (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2);
-    el.className = 'pnl-val' + (profit < 0 ? ' neg' : '');
+    const sign = (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2);
+    const cls = 'pnl-val' + (profit < 0 ? ' neg' : '');
+    document.getElementById('pnlVal').textContent = sign;
+    document.getElementById('pnlVal').className = cls;
+    document.getElementById('pnlValDetail').textContent = sign;
+    document.getElementById('pnlValDetail').className = cls;
+
     document.getElementById('sOrders').textContent = d.openOrders || 0;
     document.getElementById('sFilled').textContent = d.filledOrders || 0;
     if (d.startTime) {
@@ -178,8 +249,10 @@ async function fetchStatus() {
       document.getElementById('uptimeV').textContent = h + 'ч ' + m + 'м';
     }
   } catch(e) {
-    document.getElementById('liveBadge').textContent = '❌ Нет связи с VPS';
-    document.getElementById('liveBadge').style.color = 'var(--red)';
+    const badge = document.getElementById('liveBadge');
+    badge.textContent = '❌ Нет связи с VPS';
+    badge.classList.remove('stopped');
+    badge.classList.add('off');
     document.getElementById('dot').className = 'dot';
   }
 }
