@@ -226,13 +226,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <button class="dir-pill long" data-dir="Long">Long ↗</button>
   </div>
 
-  <div class="toggle-row" id="sidedRow">
-    <button class="toggle-pill active" data-sided="both">Обычная сетка</button>
-    <button class="toggle-pill" data-sided="one">Только хедж (односторонняя)</button>
-  </div>
-  <div style="font-size:11px;color:var(--muted);line-height:1.5;margin:-10px 0 16px;padding:0 4px">
-    <span id="sidedHint">Ставит ордера сразу по обе стороны от цены — обычный режим торговли.</span>
-  </div>
 
   <div class="wizard-nav">
     <button onclick="closeRange()">‹ Назад</button>
@@ -298,7 +291,6 @@ let wizardBotType = 'futures';
 let wizardSymbol = null;
 let wizardDirection = 'Short';
 let wizardMode = 'range';
-let wizardOneSided = false;
 let tvWidget = null;
 
 function openPairPicker(botType) {
@@ -330,10 +322,6 @@ function selectPair(symbol) {
   document.getElementById('gridCountInput').value = 33;
   document.getElementById('orderSizeInput').value = symbol === 'BTCUSDT' ? 0.001 : 0.01;
   document.getElementById('createStatus').textContent = '';
-  wizardOneSided = false;
-  document.querySelectorAll('#sidedRow .toggle-pill').forEach(p => p.classList.remove('active'));
-  document.querySelector('#sidedRow .toggle-pill[data-sided="both"]').classList.add('active');
-  document.getElementById('sidedHint').textContent = SIDED_HINTS.both;
   renderChart(symbol);
   checkGridFee();
 }
@@ -375,20 +363,6 @@ document.getElementById('dirRow').addEventListener('click', e => {
   document.querySelectorAll('#dirRow .dir-pill').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   wizardDirection = btn.dataset.dir;
-});
-
-const SIDED_HINTS = {
-  both: 'Ставит ордера сразу по обе стороны от цены — обычный режим торговли.',
-  one: 'Ставит ордера только с открывающей стороны (Sell выше цены для Short, Buy ниже для Long). Закрывающие появятся только после реальных исполнений — без "непарных" сделок. Для ботов-хеджей под опционные позиции.',
-};
-
-document.getElementById('sidedRow').addEventListener('click', e => {
-  const btn = e.target.closest('.toggle-pill');
-  if (!btn) return;
-  document.querySelectorAll('#sidedRow .toggle-pill').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-  wizardOneSided = btn.dataset.sided === 'one';
-  document.getElementById('sidedHint').textContent = SIDED_HINTS[btn.dataset.sided];
 });
 
 // Та же формула, что validateGridProfitability в gridLogic.js на сервере —
@@ -462,7 +436,6 @@ async function confirmRangeStep() {
       body: JSON.stringify({
         id, symbol: wizardSymbol, direction: wizardDirection,
         lowerPrice, upperPrice, gridCount, orderSizeEth,
-        oneSided: wizardOneSided,
       }),
     });
     const result = await r.json();
