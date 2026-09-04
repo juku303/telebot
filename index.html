@@ -136,6 +136,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     </div>
     <div class="chev">›</div>
   </div>
+
+  <div id="createdBotsList"></div>
 </div>
 
 <!-- ── Детали фьючерсного бота (реальное управление) ── -->
@@ -212,9 +214,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="range-box"><label>Верхняя граница</label><input id="upperInput" type="number" placeholder="0.00"></div>
   </div>
 
-  <div class="range-box" style="margin-bottom:16px">
-    <label>Количество сеток</label>
-    <input id="gridCountInput" type="number" placeholder="33" value="33">
+  <div class="range-inputs">
+    <div class="range-box"><label>Количество сеток</label><input id="gridCountInput" type="number" placeholder="33" value="33"></div>
+    <div class="range-box"><label>Размер ордера</label><input id="orderSizeInput" type="number" step="0.0001" placeholder="0.01" value="0.01"></div>
   </div>
 
   <div class="fee-check" id="feeCheck"></div>
@@ -226,8 +228,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
   <div class="wizard-nav">
     <button onclick="closeRange()">‹ Назад</button>
-    <span>Шаг 1 из 4</span>
-    <button class="next" id="nextBtn" onclick="confirmRangeStep()">Далее ›</button>
+    <span id="createStatus"></span>
+    <button class="next" id="nextBtn" onclick="confirmRangeStep()">Создать бота</button>
   </div>
 </div>
 
@@ -257,7 +259,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
 
-const API = 'https://trading-bot-bybit.vorotnet.kz/api/status';
+const API_BASE = 'https://trading-bot-bybit.vorotnet.kz';
+const API = API_BASE + '/api/status';
+const BOTS_API = API_BASE + '/api/bots';
 let lastPayload = null;
 let currentPeriod = '30';
 
@@ -315,6 +319,8 @@ function selectPair(symbol) {
   document.getElementById('lowerInput').value = '';
   document.getElementById('upperInput').value = '';
   document.getElementById('gridCountInput').value = 33;
+  document.getElementById('orderSizeInput').value = symbol === 'BTCUSDT' ? 0.001 : 0.01;
+  document.getElementById('createStatus').textContent = '';
   renderChart(symbol);
   checkGridFee();
 }
@@ -401,12 +407,74 @@ function checkGridFee() {
   document.getElementById(id).addEventListener('input', checkGridFee);
 });
 
-function confirmRangeStep() {
+function slugify(s) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+async function confirmRangeStep() {
   if (!gridFeeOk) {
     toast('Сначала исправьте диапазон/число сеток — сетка убыточна после комиссии');
     return;
   }
-  toast('Шаги 2–4 (плечо, объём, подтверждение) пока не реализованы');
+
+  const lowerPrice = parseFloat(document.getElementById('lowerInput').value);
+  const upperPrice = parseFloat(document.getElementById('upperInput').value);
+  const gridCount = parseInt(document.getElementById('gridCountInput').value, 10);
+  const orderSizeEth = parseFloat(document.getElementById('orderSizeInput').value);
+  const id = `${slugify(wizardSymbol)}-${slugify(wizardDirection)}-${Date.now().toString(36)}`;
+
+  const nextBtn = document.getElementById('nextBtn');
+  const statusEl = document.getElementById('createStatus');
+  nextBtn.disabled = true;
+  statusEl.textContent = 'Создаём…';
+
+  try {
+    const r = await fetch(BOTS_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id, symbol: wizardSymbol, direction: wizardDirection,
+        lowerPrice, upperPrice, gridCount, orderSizeEth,
+      }),
+    });
+    const result = await r.json();
+    if (!r.ok || result.error) {
+      statusEl.textContent = '';
+      toast('Ошибка: ' + (result.error || 'не удалось создать'));
+      return;
+    }
+    toast('✅ Бот создан и запущен: ' + id);
+    closeRange();
+    closePair();
+    loadCreatedBots();
+  } catch (e) {
+    statusEl.textContent = '';
+    toast('Нет связи с сервером: ' + e.message);
+  } finally {
+    nextBtn.disabled = false;
+    statusEl.textContent = '';
+  }
+}
+
+/** Подгружает список ботов, созданных через мастер (кроме встроенного ETH), и рисует их в общем списке */
+async function loadCreatedBots() {
+  const container = document.getElementById('createdBotsList');
+  try {
+    const r = await fetch(BOTS_API);
+    const bots = await r.json();
+    container.innerHTML = bots.map(b => `
+      <div class="bot-row" onclick="toast('Управление этим ботом появится отдельным экраном позже')">
+        <div class="bot-icon">${b.direction === 'Short' ? '🔻' : '🔺'}</div>
+        <div class="bot-info">
+          <h3>${b.symbol} · ${b.direction}</h3>
+          <p>${b.running ? '🟢 работает' : '⏸ остановлен'} · $${(b.profit || 0).toFixed(2)} · ${b.lowerPrice}–${b.upperPrice}</p>
+        </div>
+        <div class="chev">›</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    // тихо — это дополнительный список, не критично, если не подгрузился
+  }
 }
 
 // Прибыль за период считается на сервере разбором bot.log (строки TRADE
@@ -500,6 +568,8 @@ function toast(m) {
 
 fetchStatus();
 setInterval(fetchStatus, 5000);
+loadCreatedBots();
+setInterval(loadCreatedBots, 15000);
 </script>
 </body>
 </html>
