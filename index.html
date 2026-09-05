@@ -128,10 +128,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="chev">›</div>
   </div>
 
-  <div class="bot-row disabled" onclick="toast('Спотовый бот пока не реализован')">
+  <div class="bot-row" onclick="openSpotList()">
     <div class="bot-icon">💠</div>
     <div class="bot-info">
-      <h3>Спотовый бот</h3>
+      <h3>Спотовые боты</h3>
       <p>Нет активных ботов</p>
     </div>
     <div class="chev">›</div>
@@ -141,16 +141,57 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 <!-- ── Список фьючерс-ботов (легаси ETH + все созданные через мастер) ── -->
 <div class="page" id="page-futures-list" style="display:none">
   <div class="back-row" onclick="closeFuturesList()">← Назад к ботам</div>
-  <div class="wizard-title">Фьючерсные боты</div>
-  <div class="bot-row" onclick="openFutures()">
-    <div class="bot-icon">🤖</div>
-    <div class="bot-info">
-      <h3>ETHUSDT</h3>
-      <p id="futuresSub">Загрузка…</p>
-    </div>
-    <div class="chev">›</div>
+  <div class="wizard-title">Фьючерс боты</div>
+
+  <div class="toggle-row" id="futuresTabRow">
+    <button class="toggle-pill active" data-tab="active">Активные</button>
+    <button class="toggle-pill" data-tab="archive">Архив</button>
   </div>
-  <div id="createdBotsList"></div>
+
+  <input class="search-input" id="futuresSearch" placeholder="Поиск" oninput="filterFuturesRows(this.value)">
+
+  <div id="futuresActiveTab">
+    <div class="bot-row" onclick="openFutures()">
+      <div class="bot-icon">🤖</div>
+      <div class="bot-info">
+        <h3>ETHUSDT</h3>
+        <p id="futuresSub">Загрузка…</p>
+      </div>
+      <div class="chev">›</div>
+    </div>
+    <div id="createdBotsList"></div>
+  </div>
+
+  <div id="futuresArchiveTab" style="display:none; text-align:center; padding:60px 20px; color:var(--muted)">
+    <div style="font-size:48px; margin-bottom:12px">🤖</div>
+    <div>Архив пока не реализован</div>
+    <div style="font-size:12px; margin-top:6px">Боты сейчас только останавливаются, не удаляются</div>
+  </div>
+
+  <div id="futuresEmptyState" style="display:none; text-align:center; padding:60px 20px; color:var(--muted)">
+    <div style="font-size:48px; margin-bottom:12px">🤖</div>
+    <div>Боты не найдены</div>
+  </div>
+
+  <button class="btn-start" style="margin-top:8px" onclick="openPairPicker('futures')">Создать +</button>
+</div>
+
+<!-- ── Список спот-ботов (пока всегда пусто — спот не реализован) ── -->
+<div class="page" id="page-spot-list" style="display:none">
+  <div class="back-row" onclick="closeSpotList()">← Назад к ботам</div>
+  <div class="wizard-title">Спот боты</div>
+
+  <div class="toggle-row" id="spotTabRow">
+    <button class="toggle-pill active" data-tab="active">Активные</button>
+    <button class="toggle-pill" data-tab="archive">Архив</button>
+  </div>
+
+  <div style="text-align:center; padding:60px 20px; color:var(--muted)">
+    <div style="font-size:48px; margin-bottom:12px">💠</div>
+    <div>Боты не найдены</div>
+  </div>
+
+  <button class="btn-start" style="margin-top:8px" onclick="toast('Спотовые боты пока не реализованы')">Создать +</button>
 </div>
 
 <!-- ── Детали фьючерсного бота (реальное управление) ── -->
@@ -285,14 +326,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 <div class="sheet-backdrop" id="sheetBackdrop" onclick="closeSheet()"></div>
 <div class="sheet" id="sheet">
   <h4>Выберите тип бота</h4>
-  <div class="bot-row" onclick="closeSheet(); openPairPicker('futures');">
+  <div class="bot-row" onclick="closeSheet(); openFuturesList();">
     <div class="bot-icon">🤖</div>
-    <div class="bot-info"><h3>Фьючерсный бот</h3><p>Создать нового бота</p></div>
+    <div class="bot-info"><h3>Фьючерсный бот</h3><p>Список фьючерсных ботов</p></div>
     <div class="chev">›</div>
   </div>
-  <div class="bot-row disabled" onclick="closeSheet(); toast('Спотовый бот пока не реализован')">
+  <div class="bot-row" onclick="closeSheet(); openSpotList();">
     <div class="bot-icon">💠</div>
-    <div class="bot-info"><h3>Спотовый бот</h3><p>Нет активных ботов</p></div>
+    <div class="bot-info"><h3>Спотовый бот</h3><p>Список спотовых ботов</p></div>
     <div class="chev">›</div>
   </div>
 </div>
@@ -318,6 +359,50 @@ function openFuturesList() {
 function closeFuturesList() {
   document.getElementById('page-futures-list').style.display = 'none';
   document.getElementById('page-list').style.display = 'block';
+}
+
+function openSpotList() {
+  document.getElementById('page-list').style.display = 'none';
+  document.getElementById('page-spot-list').style.display = 'block';
+}
+function closeSpotList() {
+  document.getElementById('page-spot-list').style.display = 'none';
+  document.getElementById('page-list').style.display = 'block';
+}
+
+// Архив (для обеих вкладок) пока не реализован — только UI-переключатель.
+// Сам факт переключения ни на что не влияет, кроме спот-вкладки, где всё
+// равно пусто, и футур-вкладки, где показываем честную заглушку вместо
+// того чтобы делать вид, что архив работает.
+document.getElementById('futuresTabRow').addEventListener('click', e => {
+  const btn = e.target.closest('.toggle-pill');
+  if (!btn) return;
+  document.querySelectorAll('#futuresTabRow .toggle-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  const isArchive = btn.dataset.tab === 'archive';
+  document.getElementById('futuresActiveTab').style.display = isArchive ? 'none' : 'block';
+  document.getElementById('futuresArchiveTab').style.display = isArchive ? 'block' : 'none';
+  document.getElementById('futuresEmptyState').style.display = 'none';
+  document.getElementById('futuresSearch').style.display = isArchive ? 'none' : 'block';
+});
+
+document.getElementById('spotTabRow').addEventListener('click', e => {
+  const btn = e.target.closest('.toggle-pill');
+  if (!btn) return;
+  document.querySelectorAll('#spotTabRow .toggle-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+});
+
+function filterFuturesRows(q) {
+  const query = q.trim().toLowerCase();
+  const rows = document.querySelectorAll('#futuresActiveTab .bot-row');
+  let anyVisible = false;
+  rows.forEach(row => {
+    const match = row.textContent.toLowerCase().includes(query);
+    row.style.display = match ? 'flex' : 'none';
+    if (match) anyVisible = true;
+  });
+  document.getElementById('futuresEmptyState').style.display = anyVisible ? 'none' : 'block';
 }
 function openFutures() {
   document.getElementById('page-futures-list').style.display = 'none';
@@ -406,7 +491,7 @@ let wizardMode = 'range';
 let tvWidget = null;
 
 function hideAllPages() {
-  ['page-list', 'page-futures-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range']
+  ['page-list', 'page-futures-list', 'page-spot-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range']
     .forEach(id => document.getElementById(id).style.display = 'none');
 }
 
@@ -419,7 +504,7 @@ function openPairPicker(botType) {
 }
 function closePair() {
   document.getElementById('page-pair').style.display = 'none';
-  document.getElementById('page-list').style.display = 'block';
+  document.getElementById('page-futures-list').style.display = 'block';
 }
 function filterPairs(q) {
   const query = q.trim().toLowerCase();
