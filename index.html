@@ -552,7 +552,10 @@ function copyId(id) {
 /** Одна и та же карточка для активных и архивных фьючерс-ботов — отличаются
  *  только бейджем статуса и наличием "Закрыт: ..." во второй строке дат. */
 function renderBotCard(b) {
-  const profit = b.profit || 0;
+  // netProfit = валовая прибыль по спреду минус реально списанные Bybit
+  // комиссии (см. getExecutionDetails в bot.js) — честная итоговая цифра,
+  // а не оценка "до комиссии".
+  const netProfit = b.netProfit != null ? b.netProfit : ((b.profit || 0) - (b.fees || 0));
   const dirClass = b.direction === 'Short' ? 'short' : 'long';
   const badgeClass = 'ac-badge' + (b.running ? ' active' : '');
   const badgeText = b.running ? 'Активен' : 'Остановлен';
@@ -576,7 +579,7 @@ function renderBotCard(b) {
       </div>
       <div class="sgrid">
         <div class="scard"><div class="sval">${b.investmentUsdt != null ? '$' + b.investmentUsdt : '—'}</div><div class="slbl">Обеспечение</div></div>
-        <div class="scard"><div class="sval${profit < 0 ? ' neg' : ''}">${(profit >= 0 ? '+' : '') + '$' + profit.toFixed(2)}</div><div class="slbl">Прибыль сетки</div></div>
+        <div class="scard"><div class="sval${netProfit < 0 ? ' neg' : ''}">${(netProfit >= 0 ? '+' : '') + '$' + netProfit.toFixed(2)}</div><div class="slbl">Прибыль</div></div>
       </div>
     </div>`;
 }
@@ -658,9 +661,16 @@ async function fetchBotDetail() {
     const d = await r.json();
     if (d.error) { toast('❌ Бот не найден'); return; }
 
+    // profit — валовая прибыль по спреду цепочки (без учёта комиссий);
+    // fees — реально списанные Bybit комиссии по каждой сделке (см.
+    // getExecutionDetails в bot.js); netProfit — то, что бот заработал
+    // по факту. ROI/APR считаем от netProfit, а не от валовой цифры —
+    // иначе доходность была бы завышена на размер комиссий.
     const profit = d.profit || 0;
+    const fees = d.fees || 0;
+    const netProfit = d.netProfit != null ? d.netProfit : (profit - fees);
     const investment = d.investmentUsdt || 0;
-    const roi = investment > 0 ? (profit / investment * 100) : null;
+    const roi = investment > 0 ? (netProfit / investment * 100) : null;
     const durationMs = (d.stoppedAt || Date.now()) - (d.startTime || Date.now());
     const durationDays = durationMs / 86400000;
     const apr = (roi != null && durationDays > 0.001) ? (roi / durationDays * 365) : null;
@@ -675,16 +685,18 @@ async function fetchBotDetail() {
     document.getElementById('bdIdText').textContent = currentBotDetailId;
     document.getElementById('bdOrders').textContent = d.openOrders || 0;
 
-    const profitStr = (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2);
-    const profitClass = 'sval' + (profit < 0 ? ' neg' : '');
-    document.getElementById('bdProfit').textContent = profitStr;
-    document.getElementById('bdProfit').className = profitClass;
-    document.getElementById('bdRealizedPnl1').textContent = profitStr;
-    document.getElementById('bdRealizedPnl1').className = profitClass;
-    document.getElementById('bdRealizedPnl2').textContent = profitStr;
-    document.getElementById('bdRealizedPnl2').className = profitClass;
-    document.getElementById('bdGridProfit').textContent = profitStr;
-    document.getElementById('bdTotalPnl').textContent = profitStr;
+    const fmtUsd = v => (v >= 0 ? '+' : '') + '$' + v.toFixed(2);
+    const netClass = 'sval' + (netProfit < 0 ? ' neg' : '');
+    document.getElementById('bdProfit').textContent = fmtUsd(netProfit);
+    document.getElementById('bdProfit').className = netClass;
+    document.getElementById('bdRealizedPnl1').textContent = fmtUsd(netProfit);
+    document.getElementById('bdRealizedPnl1').className = netClass;
+    document.getElementById('bdRealizedPnl2').textContent = fmtUsd(netProfit);
+    document.getElementById('bdRealizedPnl2').className = netClass;
+    document.getElementById('bdGridProfit').textContent = fmtUsd(profit);
+    document.getElementById('bdGridProfit').className = 'sval' + (profit < 0 ? ' neg' : '');
+    document.getElementById('bdTotalPnl').textContent = fmtUsd(netProfit);
+    document.getElementById('bdTotalPnl').className = netClass;
 
     const roiStr = roi != null ? (roi >= 0 ? '+' : '') + roi.toFixed(2) + '%' : '—';
     const aprStr = apr != null ? (apr >= 0 ? '+' : '') + apr.toFixed(1) + '%' : '—';
@@ -693,10 +705,9 @@ async function fetchBotDetail() {
     document.getElementById('bdApr0').textContent = aprStr;
     document.getElementById('bdApr').textContent = aprStr;
 
-    // "Общая комиссия" из референса Bybit сюда честно не попадает — мы
-    // нигде не считаем и не храним фактически уплаченные комиссии по
-    // сделкам, а придумывать цифру не будем.
-    document.getElementById('bdFees').textContent = '—';
+    // Реальная сумма комиссий, списанных Bybit по каждой исполненной сделке
+    // этого бота (см. getExecutionDetails в bot.js) — больше не "—".
+    document.getElementById('bdFees').textContent = '$' + fees.toFixed(2);
 
     document.getElementById('bdSymbol').textContent = d.symbol || '—';
     document.getElementById('bdVolume').textContent = investment > 0 ? '$' + investment : '—';
@@ -785,6 +796,26 @@ function filterPairs(q) {
   });
 }
 
+// Реальная комиссия аккаунта для этого символа — пока не загрузилась (или
+// не удалось получить), checkGridFee() честно откатывается на 0.055% и это
+// видно в подписи предпросмотра, чтобы не выдавать оценку за факт.
+let wizardFeeRatePct = null;
+let wizardFeeRateSource = 'default';
+
+async function loadWizardFeeRate(symbol) {
+  wizardFeeRatePct = null;
+  wizardFeeRateSource = 'default';
+  try {
+    const r = await fetch(API_BASE + '/api/fee-rate?symbol=' + symbol);
+    const d = await r.json();
+    if (d.takerFeeRatePct != null) {
+      wizardFeeRatePct = d.takerFeeRatePct;
+      wizardFeeRateSource = 'bybit';
+    }
+  } catch (e) { /* останемся на дефолте */ }
+  checkGridFee();
+}
+
 function selectPair(symbol) {
   wizardSymbol = symbol;
   document.getElementById('page-pair').style.display = 'none';
@@ -798,6 +829,7 @@ function selectPair(symbol) {
   document.getElementById('createStatus').textContent = '';
   renderChart(symbol);
   checkGridFee();
+  loadWizardFeeRate(symbol);
 }
 
 function renderChart(symbol) {
@@ -848,7 +880,8 @@ function checkGridFee() {
   const lower = parseFloat(document.getElementById('lowerInput').value);
   const upper = parseFloat(document.getElementById('upperInput').value);
   const gridCount = parseInt(document.getElementById('gridCountInput').value, 10);
-  const feeRatePct = (lastPayload && lastPayload.feeRatePct != null) ? lastPayload.feeRatePct : 0.055;
+  const feeRatePct = wizardFeeRatePct != null ? wizardFeeRatePct : 0.055;
+  const feeLabel = wizardFeeRateSource === 'bybit' ? 'реальная комиссия с Bybit' : 'оценка по умолчанию, комиссия ещё грузится';
   const el = document.getElementById('feeCheck');
   const nextBtn = document.getElementById('nextBtn');
 
@@ -869,11 +902,11 @@ function checkGridFee() {
 
   if (gridFeeOk) {
     el.className = 'fee-check ok';
-    el.textContent = `✓ Шаг сетки ${stepPct.toFixed(3)}% — после комиссии (${feeRoundTripPct.toFixed(3)}% за цикл) чистая маржа ~${netMarginPct.toFixed(3)}%`;
+    el.textContent = `✓ Шаг сетки ${stepPct.toFixed(3)}% — после комиссии (${feeRoundTripPct.toFixed(3)}% за цикл, ${feeLabel}) чистая маржа ~${netMarginPct.toFixed(3)}%`;
     nextBtn.classList.remove('blocked');
   } else {
     el.className = 'fee-check bad';
-    el.textContent = `✗ Слишком частая сетка: шаг ${stepPct.toFixed(3)}% меньше комиссии за цикл (${feeRoundTripPct.toFixed(3)}%). Расширьте диапазон или уменьшите число сеток.`;
+    el.textContent = `✗ Слишком частая сетка: шаг ${stepPct.toFixed(3)}% меньше комиссии за цикл (${feeRoundTripPct.toFixed(3)}%, ${feeLabel}). Расширьте диапазон или уменьшите число сеток.`;
     nextBtn.classList.add('blocked');
   }
 }
