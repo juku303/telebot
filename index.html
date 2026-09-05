@@ -388,6 +388,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
   <div class="tv-wrap"><div id="tv_chart"></div></div>
 
+  <div class="dir-row" id="dirRow">
+    <button class="dir-pill short active" data-dir="Short">Short ↘</button>
+    <button class="dir-pill long" data-dir="Long">Long ↗</button>
+  </div>
+
   <div class="toggle-row" id="modeRow">
     <button class="toggle-pill active" data-mode="range">Диапазон</button>
     <button class="toggle-pill" data-mode="start">Стартовая цена</button>
@@ -404,12 +409,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   </div>
 
   <div class="fee-check" id="feeCheck"></div>
-
-  <div class="dir-row" id="dirRow">
-    <button class="dir-pill short active" data-dir="Short">Short ↘</button>
-    <button class="dir-pill long" data-dir="Long">Long ↗</button>
-  </div>
-
 
   <div class="wizard-nav">
     <button onclick="closeRange()">‹ Назад</button>
@@ -838,6 +837,7 @@ function renderChart(symbol) {
     container_id: 'tv_chart',
     symbol: 'BYBIT:' + symbol,
     interval: '60',
+    range: '2D',
     theme: 'dark',
     style: '1',
     locale: 'ru',
