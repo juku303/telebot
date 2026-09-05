@@ -119,11 +119,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <button class="period-pill" data-p="all">Всё время</button>
   </div>
 
-  <div class="bot-row" onclick="openFutures()">
+  <div class="bot-row" onclick="openFuturesList()">
     <div class="bot-icon">🤖</div>
     <div class="bot-info">
-      <h3>Фьючерсный бот</h3>
-      <p id="futuresSub">Загрузка…</p>
+      <h3>Фьючерсные боты</h3>
+      <p id="futuresListSub">Загрузка…</p>
     </div>
     <div class="chev">›</div>
   </div>
@@ -136,13 +136,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     </div>
     <div class="chev">›</div>
   </div>
+</div>
 
+<!-- ── Список фьючерс-ботов (легаси ETH + все созданные через мастер) ── -->
+<div class="page" id="page-futures-list" style="display:none">
+  <div class="back-row" onclick="closeFuturesList()">← Назад к ботам</div>
+  <div class="wizard-title">Фьючерсные боты</div>
+  <div class="bot-row" onclick="openFutures()">
+    <div class="bot-icon">🤖</div>
+    <div class="bot-info">
+      <h3>ETHUSDT</h3>
+      <p id="futuresSub">Загрузка…</p>
+    </div>
+    <div class="chev">›</div>
+  </div>
   <div id="createdBotsList"></div>
 </div>
 
 <!-- ── Детали фьючерсного бота (реальное управление) ── -->
 <div class="page" id="page-futures" style="display:none">
-  <div class="back-row" onclick="closeFutures()">← Назад к ботам</div>
+  <div class="back-row" onclick="closeFutures()">← Назад к списку</div>
   <div class="live-badge" id="liveBadge">⏳ Загрузка...</div>
 
   <div class="pnl-card">
@@ -177,6 +190,37 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
       <span style="color:var(--accent)">/run</span> — запустить бота<br>
       <span style="color:var(--accent)">/stop</span> — остановить бота
     </div>
+  </div>
+</div>
+
+<!-- ── Детали созданного бота (управление через /api/bots/:id) ── -->
+<div class="page" id="page-bot-detail" style="display:none">
+  <div class="back-row" onclick="closeBotDetail()">← Назад к списку</div>
+  <div class="live-badge" id="bdLiveBadge">⏳ Загрузка...</div>
+
+  <div class="pnl-card">
+    <div class="pnl-lbl">Реальная прибыль с Bybit</div>
+    <div class="pnl-val" id="bdPnlVal">$0.00</div>
+    <div style="margin-top:8px"><span style="font-size:12px;color:var(--muted)">Uptime: <span style="color:var(--accent)" id="bdUptime">—</span></span></div>
+  </div>
+
+  <div class="sgrid">
+    <div class="scard"><div class="sval" id="bdOrders">—</div><div class="slbl">Открытых ордеров</div></div>
+    <div class="scard"><div class="sval" id="bdFilled">—</div><div class="slbl">Исполнено сеток</div></div>
+  </div>
+
+  <div class="detail-card">
+    <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Параметры</div>
+    <div style="font-size:12px;color:var(--muted);line-height:2">
+      Диапазон: <span style="color:var(--text)" id="bdRange">—</span><br>
+      Сеток: <span style="color:var(--text)" id="bdGrid">—</span> · Направление: <span style="color:var(--red)" id="bdDir">—</span>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px">Управление ботом</div>
+    <button class="btn-stop" onclick="stopBotDetail()">■ ОСТАНОВИТЬ БОТА</button>
+    <button class="btn-start" onclick="startBotDetail()">▶ ЗАПУСТИТЬ БОТА</button>
   </div>
 </div>
 
@@ -266,13 +310,81 @@ const BOTS_API = API_BASE + '/api/bots';
 let lastPayload = null;
 let currentPeriod = '30';
 
-function openFutures() {
+function openFuturesList() {
   document.getElementById('page-list').style.display = 'none';
+  document.getElementById('page-futures-list').style.display = 'block';
+  loadCreatedBots();
+}
+function closeFuturesList() {
+  document.getElementById('page-futures-list').style.display = 'none';
+  document.getElementById('page-list').style.display = 'block';
+}
+function openFutures() {
+  document.getElementById('page-futures-list').style.display = 'none';
   document.getElementById('page-futures').style.display = 'block';
 }
 function closeFutures() {
   document.getElementById('page-futures').style.display = 'none';
-  document.getElementById('page-list').style.display = 'block';
+  document.getElementById('page-futures-list').style.display = 'block';
+}
+
+let currentBotDetailId = null;
+
+async function openBotDetail(id) {
+  currentBotDetailId = id;
+  document.getElementById('page-futures-list').style.display = 'none';
+  document.getElementById('page-bot-detail').style.display = 'block';
+  await fetchBotDetail();
+}
+function closeBotDetail() {
+  currentBotDetailId = null;
+  document.getElementById('page-bot-detail').style.display = 'none';
+  document.getElementById('page-futures-list').style.display = 'block';
+}
+
+async function fetchBotDetail() {
+  if (!currentBotDetailId) return;
+  const badge = document.getElementById('bdLiveBadge');
+  try {
+    const r = await fetch(BOTS_API + '/' + currentBotDetailId + '/status');
+    const d = await r.json();
+    if (d.error) { badge.textContent = '❌ Бот не найден'; badge.classList.add('off'); return; }
+
+    badge.classList.remove('off', 'stopped');
+    badge.textContent = d.running ? '🟢 LIVE — реальные данные' : '⏸ Бот остановлен';
+    if (!d.running) badge.classList.add('stopped');
+
+    const profit = d.profit || 0;
+    const pnlEl = document.getElementById('bdPnlVal');
+    pnlEl.textContent = (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2);
+    pnlEl.className = 'pnl-val' + (profit < 0 ? ' neg' : '');
+
+    document.getElementById('bdOrders').textContent = d.openOrders || 0;
+    document.getElementById('bdFilled').textContent = d.filledOrders || 0;
+    document.getElementById('bdRange').textContent = '$' + d.lowerPrice + ' — $' + d.upperPrice;
+    document.getElementById('bdGrid').textContent = d.gridCount;
+    document.getElementById('bdDir').textContent = d.direction;
+    if (d.startTime) {
+      const mins = Math.floor((Date.now() - d.startTime) / 60000);
+      document.getElementById('bdUptime').textContent = Math.floor(mins / 60) + 'ч ' + (mins % 60) + 'м';
+    }
+  } catch (e) {
+    badge.textContent = '❌ Нет связи с VPS';
+    badge.classList.add('off');
+  }
+}
+
+async function startBotDetail() {
+  if (!currentBotDetailId) return;
+  await fetch(BOTS_API + '/' + currentBotDetailId + '/start', { method: 'POST' });
+  toast('▶ Команда запуска отправлена');
+  fetchBotDetail();
+}
+async function stopBotDetail() {
+  if (!currentBotDetailId) return;
+  await fetch(BOTS_API + '/' + currentBotDetailId + '/stop', { method: 'POST' });
+  toast('⏸ Команда остановки отправлена');
+  fetchBotDetail();
 }
 function openSheet() {
   document.getElementById('sheetBackdrop').classList.add('show');
@@ -293,11 +405,16 @@ let wizardDirection = 'Short';
 let wizardMode = 'range';
 let tvWidget = null;
 
+function hideAllPages() {
+  ['page-list', 'page-futures-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range']
+    .forEach(id => document.getElementById(id).style.display = 'none');
+}
+
 function openPairPicker(botType) {
   wizardBotType = botType;
   document.getElementById('pairSearch').value = '';
   filterPairs('');
-  document.getElementById('page-list').style.display = 'none';
+  hideAllPages();
   document.getElementById('page-pair').style.display = 'block';
 }
 function closePair() {
@@ -445,8 +562,8 @@ async function confirmRangeStep() {
       return;
     }
     toast('✅ Бот создан и запущен: ' + id);
-    closeRange();
-    closePair();
+    hideAllPages();
+    document.getElementById('page-futures-list').style.display = 'block';
     loadCreatedBots();
   } catch (e) {
     statusEl.textContent = '';
@@ -460,11 +577,12 @@ async function confirmRangeStep() {
 /** Подгружает список ботов, созданных через мастер (кроме встроенного ETH), и рисует их в общем списке */
 async function loadCreatedBots() {
   const container = document.getElementById('createdBotsList');
+  const listSub = document.getElementById('futuresListSub');
   try {
     const r = await fetch(BOTS_API);
     const bots = await r.json();
     container.innerHTML = bots.map(b => `
-      <div class="bot-row" onclick="toast('Управление этим ботом появится отдельным экраном позже')">
+      <div class="bot-row" onclick="openBotDetail('${b.id}')">
         <div class="bot-icon">${b.direction === 'Short' ? '🔻' : '🔺'}</div>
         <div class="bot-info">
           <h3>${b.symbol} · ${b.direction}</h3>
@@ -473,6 +591,7 @@ async function loadCreatedBots() {
         <div class="chev">›</div>
       </div>
     `).join('');
+    if (listSub) listSub.textContent = (1 + bots.length) + ' бот' + (bots.length === 0 ? '' : 'ов');
   } catch (e) {
     // тихо — это дополнительный список, не критично, если не подгрузился
   }
