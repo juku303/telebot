@@ -75,7 +75,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 .wizard-title{font-size:20px;font-weight:600;margin-bottom:16px}
 .tv-wrap{background:var(--card);border-radius:16px;overflow:hidden;margin-bottom:16px;height:280px}
-.tv-wrap #tv_chart{height:100%}
+.tv-wrap #tv_chart,.tv-wrap #tv_chart2{height:100%}
 
 .toggle-row{display:flex;background:var(--card);border-radius:14px;padding:4px;margin-bottom:16px}
 .toggle-pill{flex:1;text-align:center;padding:10px;border-radius:11px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;background:none;border:none}
@@ -93,6 +93,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .btn-stub{width:100%;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;color:var(--muted);font-size:14px;text-align:left;margin-bottom:16px;cursor:not-allowed;opacity:.6;display:flex;justify-content:space-between;align-items:center}
 .range-box.disabled{opacity:.45}
 .range-box.disabled input,.range-box.disabled .stepper-btn{pointer-events:none}
+.level-viz-wrap{background:var(--card);border-radius:16px;padding:12px 14px;margin-bottom:16px}
+.level-viz-label{font-size:11px;color:var(--muted);margin-bottom:8px}
+#levelViz{width:100%;height:160px;display:block}
+.level-viz-scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px}
 .range-box label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px}
 .range-box input{width:100%;background:none;border:none;color:var(--text);font-family:var(--mono);font-size:16px;font-weight:700}
 .range-box input:focus{outline:none}
@@ -426,6 +430,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <div class="wizard-title" id="gridTitle">Создание фьючерс бота</div>
 
   <div class="tv-wrap"><div id="tv_chart2"></div></div>
+
+  <div class="level-viz-wrap">
+    <div class="level-viz-label">Уровни сетки: <span id="levelVizCount">—</span></div>
+    <svg id="levelViz" viewBox="0 0 300 160" preserveAspectRatio="none"></svg>
+    <div class="level-viz-scale"><span id="levelVizUpper">—</span><span id="levelVizLower">—</span></div>
+  </div>
 
   <div class="toggle-row" id="gridTypeRow">
     <button class="toggle-pill active" data-gtype="arithmetic">Арифм.</button>
@@ -855,16 +865,29 @@ function hideAllPages() {
     .forEach(id => document.getElementById(id).style.display = 'none');
 }
 
+/** Кнопка "+" открывает мастер создания ещё одного бота — бессмысленна,
+ *  пока мы уже ВНУТРИ мастера (выбор пары / шаг 1 / шаг 2 / финал). */
+function hideFab() {
+  document.querySelector('.fab').style.display = 'none';
+  document.querySelector('.fab-label').style.display = 'none';
+}
+function showFab() {
+  document.querySelector('.fab').style.display = 'flex';
+  document.querySelector('.fab-label').style.display = 'block';
+}
+
 function openPairPicker(botType) {
   wizardBotType = botType;
   document.getElementById('pairSearch').value = '';
   filterPairs('');
   hideAllPages();
   document.getElementById('page-pair').style.display = 'block';
+  hideFab();
 }
 function closePair() {
   document.getElementById('page-pair').style.display = 'none';
   document.getElementById('page-futures-list').style.display = 'block';
+  showFab();
 }
 function filterPairs(q) {
   const query = q.trim().toLowerCase();
@@ -1145,11 +1168,53 @@ function minMaxStepPct(lower, upper, gridCount, gridType, gridCurvature) {
   return { min, max };
 }
 
+/**
+ * Свободный встраиваемый виджет TradingView (tv.js) не даёт публичного API
+ * для рисования произвольных горизонтальных линий поверх свечей (это есть
+ * только в платной Charting Library) — поэтому реальные уровни сетки
+ * рисуем не поверх графика, а отдельной полосой рядом: горизонтальные
+ * линии внутри SVG, позиционированные пропорционально между нижней и
+ * верхней границей, ровно как расположены настоящие уровни для текущего
+ * типа/количества/кривизны сетки.
+ */
+function renderLevelViz(lower, upper, gridCount, gridType, gridCurvature) {
+  const svg = document.getElementById('levelViz');
+  const countEl = document.getElementById('levelVizCount');
+  const upperEl = document.getElementById('levelVizUpper');
+  const lowerEl = document.getElementById('levelVizLower');
+
+  if (!lower || !upper || !gridCount || upper <= lower) {
+    svg.innerHTML = '';
+    countEl.textContent = '—';
+    upperEl.textContent = '—';
+    lowerEl.textContent = '—';
+    return;
+  }
+
+  const levels = calcGridLevelsClient(lower, upper, gridCount, gridType, gridCurvature);
+  // "Линейка" с засечками, а не сплошные линии во всю ширину — при трёх
+  // десятках уровней сплошные горизонтальные полосы на всю ширину сливаются
+  // в один блок и не показывают разницу в плотности между типами сетки.
+  // Короткие засечки от общей вертикальной оси читаются гораздо лучше.
+  const H = 160, W = 300, axisX = 6, tickLen = 110;
+  let svgContent = `<line x1="${axisX}" y1="0" x2="${axisX}" y2="${H}" stroke="#2c2c30" stroke-width="1"/>`;
+  for (let i = 0; i < levels.length; i++) {
+    const y = (1 - (levels[i] - lower) / (upper - lower)) * (H - 2) + 1;
+    const edge = i === 0 || i === levels.length - 1;
+    svgContent += `<line x1="${axisX}" y1="${y.toFixed(2)}" x2="${axisX + (edge ? tickLen + 40 : tickLen)}" y2="${y.toFixed(2)}" stroke="${edge ? 'var(--accent2)' : 'var(--accent)'}" stroke-width="${edge ? 2 : 1}" opacity="${edge ? 1 : 0.8}"/>`;
+  }
+  svg.innerHTML = svgContent;
+  countEl.textContent = levels.length + ' (' + { arithmetic: 'арифметическая', geometric: 'геометрическая', exponential: 'экспоненциальная' }[gridType] + ')';
+  upperEl.textContent = '$' + upper;
+  lowerEl.textContent = '$' + lower;
+}
+
 function computeStepDisplay() {
   const lower = parseFloat(document.getElementById('lowerInput2').value);
   const upper = parseFloat(document.getElementById('upperInput2').value);
   const gridCount = parseInt(document.getElementById('gridCountInput').value, 10);
   const el = document.getElementById('stepPriceVal');
+  renderLevelViz(lower, upper, gridCount, wizardGridType, wizardGridCurvature);
   if (!lower || !upper || !gridCount || upper <= lower) { el.textContent = '—'; return; }
   // Для geometric показываем ТОТ ЖЕ % (ratio-1), что и поле "Шаг в %" —
   // иначе два числа "процентного шага" на одном экране отличались бы на
@@ -1252,6 +1317,7 @@ async function confirmRangeStep() {
     toast('✅ Бот создан и запущен: ' + id);
     hideAllPages();
     document.getElementById('page-futures-list').style.display = 'block';
+    showFab();
     loadCreatedBots();
   } catch (e) {
     statusEl.textContent = '';
