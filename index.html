@@ -49,6 +49,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .scard{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}
 .sval{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--text);line-height:1;margin-bottom:4px}
+.sval.neg{color:var(--red)}
 .slbl{font-size:11px;color:var(--muted)}
 .live-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(0,229,160,.1);border:1px solid rgba(0,229,160,.3);border-radius:8px;padding:4px 10px;font-size:11px;font-family:var(--mono);color:var(--accent);margin-bottom:12px}
 .live-badge.off{background:rgba(255,77,106,.1);border-color:rgba(255,77,106,.3);color:var(--red)}
@@ -97,6 +98,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 20px;font-size:13px;color:var(--text);opacity:0;transition:all .3s;z-index:999;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.archive-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:12px;cursor:pointer}
+.ac-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.ac-id{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.ac-copy{cursor:pointer;opacity:.7}
+.ac-copy:active{opacity:1}
+.ac-badge{font-family:var(--mono);font-size:10px;color:var(--muted);background:rgba(138,138,146,.15);border:1px solid rgba(138,138,146,.3);border-radius:8px;padding:3px 9px}
+.ac-pair-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.ac-pair-row h3{font-size:15px;font-weight:600;margin-bottom:2px}
+.ac-pair-row p{font-size:11px;color:var(--muted)}
+.ac-dir{font-family:var(--mono)}
+.ac-dir.short{color:var(--red)}
+.ac-dir.long{color:var(--accent2)}
 </style>
 </head>
 <body>
@@ -162,10 +176,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div id="createdBotsList"></div>
   </div>
 
-  <div id="futuresArchiveTab" style="display:none; text-align:center; padding:60px 20px; color:var(--muted)">
-    <div style="font-size:48px; margin-bottom:12px">🤖</div>
-    <div>Архив пока не реализован</div>
-    <div style="font-size:12px; margin-top:6px">Боты сейчас только останавливаются, не удаляются</div>
+  <div id="futuresArchiveTab" style="display:none">
+    <div id="archiveList"></div>
+    <div id="archiveEmptyState" style="display:none; text-align:center; padding:60px 20px; color:var(--muted)">
+      <div style="font-size:48px; margin-bottom:12px">🤖</div>
+      <div>Боты не найдены</div>
+    </div>
   </div>
 
   <div id="futuresEmptyState" style="display:none; text-align:center; padding:60px 20px; color:var(--muted)">
@@ -354,6 +370,11 @@ let currentPeriod = '30';
 function openFuturesList() {
   document.getElementById('page-list').style.display = 'none';
   document.getElementById('page-futures-list').style.display = 'block';
+  futuresTab = 'active';
+  document.querySelectorAll('#futuresTabRow .toggle-pill').forEach(p => p.classList.toggle('active', p.dataset.tab === 'active'));
+  document.getElementById('futuresActiveTab').style.display = 'block';
+  document.getElementById('futuresArchiveTab').style.display = 'none';
+  document.getElementById('futuresSearch').value = '';
   loadCreatedBots();
 }
 function closeFuturesList() {
@@ -370,20 +391,23 @@ function closeSpotList() {
   document.getElementById('page-list').style.display = 'block';
 }
 
-// Архив (для обеих вкладок) пока не реализован — только UI-переключатель.
-// Сам факт переключения ни на что не влияет, кроме спот-вкладки, где всё
-// равно пусто, и футур-вкладки, где показываем честную заглушку вместо
-// того чтобы делать вид, что архив работает.
+// Спот-архив пока не реализован — сама вкладка спота всегда пуста незав.
+// от переключателя. Футур-архив ниже — рабочий, тянет реальные остановленные
+// экземпляры из /api/bots.
+let futuresTab = 'active';
+
 document.getElementById('futuresTabRow').addEventListener('click', e => {
   const btn = e.target.closest('.toggle-pill');
   if (!btn) return;
   document.querySelectorAll('#futuresTabRow .toggle-pill').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
-  const isArchive = btn.dataset.tab === 'archive';
+  futuresTab = btn.dataset.tab;
+  const isArchive = futuresTab === 'archive';
   document.getElementById('futuresActiveTab').style.display = isArchive ? 'none' : 'block';
   document.getElementById('futuresArchiveTab').style.display = isArchive ? 'block' : 'none';
   document.getElementById('futuresEmptyState').style.display = 'none';
-  document.getElementById('futuresSearch').style.display = isArchive ? 'none' : 'block';
+  document.getElementById('futuresSearch').value = '';
+  if (isArchive) loadArchiveBots(); else filterFuturesRows('');
 });
 
 document.getElementById('spotTabRow').addEventListener('click', e => {
@@ -395,6 +419,17 @@ document.getElementById('spotTabRow').addEventListener('click', e => {
 
 function filterFuturesRows(q) {
   const query = q.trim().toLowerCase();
+  if (futuresTab === 'archive') {
+    const cards = document.querySelectorAll('#archiveList .archive-card');
+    let anyVisible = false;
+    cards.forEach(card => {
+      const match = card.textContent.toLowerCase().includes(query);
+      card.style.display = match ? 'block' : 'none';
+      if (match) anyVisible = true;
+    });
+    document.getElementById('archiveEmptyState').style.display = anyVisible ? 'none' : 'block';
+    return;
+  }
   const rows = document.querySelectorAll('#futuresActiveTab .bot-row');
   let anyVisible = false;
   rows.forEach(row => {
@@ -403,6 +438,63 @@ function filterFuturesRows(q) {
     if (match) anyVisible = true;
   });
   document.getElementById('futuresEmptyState').style.display = anyVisible ? 'none' : 'block';
+}
+
+function formatDate(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function copyId(id) {
+  if (navigator.clipboard) navigator.clipboard.writeText(id).catch(() => {});
+  toast('ID скопирован');
+}
+
+/** Архив = остановленные экземпляры, созданные через мастер (легаси ETH-бот
+ *  в реестр /api/bots не входит, у него нет id и отдельного архива). */
+async function loadArchiveBots() {
+  const list = document.getElementById('archiveList');
+  const empty = document.getElementById('archiveEmptyState');
+  try {
+    const r = await fetch(BOTS_API);
+    const bots = (await r.json()).filter(b => !b.running);
+    if (bots.length === 0) {
+      list.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    list.innerHTML = bots.map(b => {
+      const profit = b.profit || 0;
+      const dirClass = b.direction === 'Short' ? 'short' : 'long';
+      return `
+      <div class="archive-card" onclick="openBotDetail('${b.id}')">
+        <div class="ac-top">
+          <span class="ac-id">ID: ${b.id} <span class="ac-copy" onclick="event.stopPropagation(); copyId('${b.id}')">⧉</span></span>
+          <span class="ac-badge">Остановлен</span>
+        </div>
+        <div class="ac-pair-row">
+          <div class="bot-icon" style="font-size:20px">${b.direction === 'Short' ? '🔻' : '🔺'}</div>
+          <div>
+            <h3>${b.symbol}</h3>
+            <p>Запуск: ${formatDate(b.startTime)}${b.stoppedAt ? ' · Закрыт: ' + formatDate(b.stoppedAt) : ''}</p>
+          </div>
+        </div>
+        <div class="sgrid" style="margin-bottom:10px">
+          <div class="scard"><div class="sval ac-dir ${dirClass}">${b.lowerPrice}–${b.upperPrice}</div><div class="slbl">${b.direction || '—'}</div></div>
+          <div class="scard"><div class="sval">${b.currentPrice != null ? b.currentPrice : '—'}</div><div class="slbl">Текущая цена</div></div>
+        </div>
+        <div class="sgrid">
+          <div class="scard"><div class="sval">${b.investmentUsdt != null ? '$' + b.investmentUsdt : '—'}</div><div class="slbl">Обеспечение</div></div>
+          <div class="scard"><div class="sval${profit < 0 ? ' neg' : ''}">${(profit >= 0 ? '+' : '') + '$' + profit.toFixed(2)}</div><div class="slbl">Прибыль сетки</div></div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    empty.textContent = '';
+    empty.style.display = 'block';
+    empty.innerHTML = '<div style="font-size:48px; margin-bottom:12px">⚠️</div><div>Не удалось загрузить архив</div>';
+  }
 }
 function openFutures() {
   document.getElementById('page-futures-list').style.display = 'none';
