@@ -112,6 +112,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .ac-dir{font-family:var(--mono)}
 .ac-dir.short{color:var(--red)}
 .ac-dir.long{color:var(--accent2)}
+.section-title{font-size:13px;color:var(--muted);font-weight:600;margin:18px 2px 10px}
 </style>
 </head>
 <body>
@@ -264,28 +265,72 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 <!-- ── Детали созданного бота (управление через /api/bots/:id) ── -->
 <div class="page" id="page-bot-detail" style="display:none">
   <div class="back-row" onclick="closeBotDetail()">← Назад к списку</div>
-  <div class="live-badge" id="bdLiveBadge">⏳ Загрузка...</div>
-
-  <div class="pnl-card">
-    <div class="pnl-lbl">Реальная прибыль с Bybit</div>
-    <div class="pnl-val" id="bdPnlVal">$0.00</div>
-    <div style="margin-top:8px"><span style="font-size:12px;color:var(--muted)">Uptime: <span style="color:var(--accent)" id="bdUptime">—</span></span></div>
-  </div>
-
-  <div class="sgrid">
-    <div class="scard"><div class="sval" id="bdOrders">—</div><div class="slbl">Открытых ордеров</div></div>
-    <div class="scard"><div class="sval" id="bdFilled">—</div><div class="slbl">Исполнено сеток</div></div>
-  </div>
 
   <div class="detail-card">
-    <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Параметры</div>
-    <div style="font-size:12px;color:var(--muted);line-height:2">
-      Диапазон: <span style="color:var(--text)" id="bdRange">—</span><br>
-      Сеток: <span style="color:var(--text)" id="bdGrid">—</span> · Направление: <span style="color:var(--red)" id="bdDir">—</span>
+    <span class="ac-badge" id="bdStatusBadge">—</span>
+    <div style="font-size:20px;font-weight:600;margin:10px 0 2px" id="bdTitle">—</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px" id="bdDates">—</div>
+    <div class="ac-id">ID: <span id="bdIdText">—</span> <span class="ac-copy" onclick="copyId(currentBotDetailId)">⧉</span></div>
+  </div>
+
+  <div class="toggle-row" id="bdTabRow">
+    <button class="toggle-pill active" data-tab="details">Детали</button>
+    <button class="toggle-pill" data-tab="logs">Логи</button>
+  </div>
+
+  <div id="bdDetailsTab">
+    <div class="sgrid">
+      <div class="scard"><div class="sval" id="bdProfit">—</div><div class="slbl">Общая прибыль</div></div>
+      <div class="scard"><div class="sval" id="bdRoi">—</div><div class="slbl">ROI</div></div>
+    </div>
+
+    <div class="section-title">Основная информация</div>
+    <div class="sgrid">
+      <div class="scard"><div class="sval" id="bdSymbol">—</div><div class="slbl">Пара</div></div>
+      <div class="scard"><div class="sval" id="bdVolume">—</div><div class="slbl">Объём</div></div>
+    </div>
+    <div class="sgrid">
+      <div class="scard"><div class="sval" id="bdCollateral">—</div><div class="slbl">Обеспечение</div></div>
+      <div class="scard"><div class="sval ac-dir" id="bdDirection">—</div><div class="slbl">Направление</div></div>
+    </div>
+    <div class="sgrid">
+      <div class="scard" style="grid-column:1 / -1"><div class="sval" id="bdDuration">—</div><div class="slbl">Время выполнения</div></div>
+    </div>
+
+    <div class="section-title">Эффективность</div>
+    <div class="detail-card" style="background:rgba(124,92,255,.12);border-color:rgba(124,92,255,.3);margin-bottom:10px">
+      <div class="sval" id="bdRealizedPnl" style="font-size:22px">—</div>
+      <div class="slbl">Реализованный PnL</div>
+    </div>
+    <div class="sgrid">
+      <div class="scard"><div class="sval" id="bdOrders">—</div><div class="slbl">Открытых ордеров</div></div>
+      <div class="scard"><div class="sval" id="bdFilled">—</div><div class="slbl">Исполнено сделок</div></div>
+    </div>
+    <div class="sgrid">
+      <div class="scard"><div class="sval" id="bdRoi2">—</div><div class="slbl">ROI</div></div>
+      <div class="scard"><div class="sval" id="bdApr">—</div><div class="slbl">APR</div></div>
+    </div>
+
+    <div class="section-title">Детали</div>
+    <div class="sgrid">
+      <div class="scard"><div class="sval">Bybit</div><div class="slbl">Аккаунт</div></div>
+      <div class="scard"><div class="sval" id="bdGridType">—</div><div class="slbl">Сеток</div></div>
+    </div>
+    <div class="sgrid">
+      <div class="scard"><div class="sval" id="bdUpper">—</div><div class="slbl">Верхняя граница</div></div>
+      <div class="scard"><div class="sval" id="bdLower">—</div><div class="slbl">Нижняя граница</div></div>
+    </div>
+    <div class="sgrid">
+      <div class="scard"><div class="sval" id="bdStepAbs">—</div><div class="slbl">Шаг цены</div></div>
+      <div class="scard"><div class="sval" id="bdStepPct">—</div><div class="slbl">Шаг цены, %</div></div>
     </div>
   </div>
 
-  <div class="detail-card">
+  <div id="bdLogsTab" style="display:none">
+    <div class="detail-card" id="bdLogBox" style="font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.7;max-height:420px;overflow-y:auto;white-space:pre-wrap">Загрузка…</div>
+  </div>
+
+  <div class="detail-card" style="margin-top:6px">
     <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px">Управление ботом</div>
     <button class="btn-stop" onclick="stopBotDetail()">■ ОСТАНОВИТЬ БОТА</button>
     <button class="btn-start" onclick="startBotDetail()">▶ ЗАПУСТИТЬ БОТА</button>
@@ -538,9 +583,14 @@ function closeFutures() {
 }
 
 let currentBotDetailId = null;
+let bdTab = 'details';
 
 async function openBotDetail(id) {
   currentBotDetailId = id;
+  bdTab = 'details';
+  document.querySelectorAll('#bdTabRow .toggle-pill').forEach(p => p.classList.toggle('active', p.dataset.tab === 'details'));
+  document.getElementById('bdDetailsTab').style.display = 'block';
+  document.getElementById('bdLogsTab').style.display = 'none';
   document.getElementById('page-futures-list').style.display = 'none';
   document.getElementById('page-bot-detail').style.display = 'block';
   await fetchBotDetail();
@@ -551,35 +601,95 @@ function closeBotDetail() {
   document.getElementById('page-futures-list').style.display = 'block';
 }
 
+document.getElementById('bdTabRow').addEventListener('click', e => {
+  const btn = e.target.closest('.toggle-pill');
+  if (!btn) return;
+  document.querySelectorAll('#bdTabRow .toggle-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  bdTab = btn.dataset.tab;
+  document.getElementById('bdDetailsTab').style.display = bdTab === 'logs' ? 'none' : 'block';
+  document.getElementById('bdLogsTab').style.display = bdTab === 'logs' ? 'block' : 'none';
+  if (bdTab === 'logs') fetchBotLog();
+});
+
+function formatDuration(ms) {
+  if (!ms || ms < 0) return '—';
+  const mins = Math.floor(ms / 60000);
+  const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
+  return (d > 0 ? d + 'д ' : '') + h + 'ч ' + m + 'м';
+}
+
+/** Все показатели ниже — либо прямые поля из /api/bots/:id/status, либо
+ *  честно выводимые из них (ROI/APR/шаг сетки в % и в деньгах). "Общая
+ *  комиссия" из референса Bybit сюда не попала — мы нигде не считаем и не
+ *  храним фактически уплаченные комиссии по каждой сделке, а придумывать
+ *  цифру не будем. */
 async function fetchBotDetail() {
   if (!currentBotDetailId) return;
-  const badge = document.getElementById('bdLiveBadge');
   try {
     const r = await fetch(BOTS_API + '/' + currentBotDetailId + '/status');
     const d = await r.json();
-    if (d.error) { badge.textContent = '❌ Бот не найден'; badge.classList.add('off'); return; }
-
-    badge.classList.remove('off', 'stopped');
-    badge.textContent = d.running ? '🟢 LIVE — реальные данные' : '⏸ Бот остановлен';
-    if (!d.running) badge.classList.add('stopped');
+    if (d.error) { toast('❌ Бот не найден'); return; }
 
     const profit = d.profit || 0;
-    const pnlEl = document.getElementById('bdPnlVal');
-    pnlEl.textContent = (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2);
-    pnlEl.className = 'pnl-val' + (profit < 0 ? ' neg' : '');
+    const investment = d.investmentUsdt || 0;
+    const roi = investment > 0 ? (profit / investment * 100) : null;
+    const durationMs = (d.stoppedAt || Date.now()) - (d.startTime || Date.now());
+    const durationDays = durationMs / 86400000;
+    const apr = (roi != null && durationDays > 0.001) ? (roi / durationDays * 365) : null;
+    const step = (d.gridCount > 0) ? (d.upperPrice - d.lowerPrice) / d.gridCount : null;
+    const midPrice = (d.upperPrice + d.lowerPrice) / 2;
+    const stepPct = step != null ? (step / midPrice * 100) : null;
+
+    document.getElementById('bdStatusBadge').textContent = d.running ? 'Активен' : 'Остановлен';
+    document.getElementById('bdStatusBadge').className = 'ac-badge' + (d.running ? ' active' : '');
+    document.getElementById('bdTitle').textContent = d.symbol + ' · ' + d.direction;
+    document.getElementById('bdDates').textContent =
+      'Запуск: ' + formatDate(d.startTime) + (d.stoppedAt ? ' · Закрыт: ' + formatDate(d.stoppedAt) : '');
+    document.getElementById('bdIdText').textContent = currentBotDetailId;
+
+    const profitStr = (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2);
+    document.getElementById('bdProfit').textContent = profitStr;
+    document.getElementById('bdProfit').className = 'sval' + (profit < 0 ? ' neg' : '');
+    document.getElementById('bdRealizedPnl').textContent = profitStr;
+    document.getElementById('bdRealizedPnl').className = 'sval' + (profit < 0 ? ' neg' : '') ;
+    document.getElementById('bdRealizedPnl').style.fontSize = '22px';
+    const roiStr = roi != null ? (roi >= 0 ? '+' : '') + roi.toFixed(2) + '%' : '—';
+    document.getElementById('bdRoi').textContent = roiStr;
+    document.getElementById('bdRoi2').textContent = roiStr;
+    document.getElementById('bdApr').textContent = apr != null ? (apr >= 0 ? '+' : '') + apr.toFixed(1) + '%' : '—';
+
+    document.getElementById('bdSymbol').textContent = d.symbol || '—';
+    document.getElementById('bdVolume').textContent = investment > 0 ? '$' + investment : '—';
+    document.getElementById('bdCollateral').textContent = investment > 0 ? '$' + investment : '—';
+    const dirEl = document.getElementById('bdDirection');
+    dirEl.textContent = d.direction || '—';
+    dirEl.className = 'sval ac-dir' + (d.direction === 'Short' ? ' short' : ' long');
+    document.getElementById('bdDuration').textContent = formatDuration(durationMs);
 
     document.getElementById('bdOrders').textContent = d.openOrders || 0;
     document.getElementById('bdFilled').textContent = d.filledOrders || 0;
-    document.getElementById('bdRange').textContent = '$' + d.lowerPrice + ' — $' + d.upperPrice;
-    document.getElementById('bdGrid').textContent = d.gridCount;
-    document.getElementById('bdDir').textContent = d.direction;
-    if (d.startTime) {
-      const mins = Math.floor((Date.now() - d.startTime) / 60000);
-      document.getElementById('bdUptime').textContent = Math.floor(mins / 60) + 'ч ' + (mins % 60) + 'м';
-    }
+
+    document.getElementById('bdGridType').textContent = (d.gridCount != null ? d.gridCount : '—') + ' (Арифметическая)';
+    document.getElementById('bdUpper').textContent = d.upperPrice != null ? '$' + d.upperPrice : '—';
+    document.getElementById('bdLower').textContent = d.lowerPrice != null ? '$' + d.lowerPrice : '—';
+    document.getElementById('bdStepAbs').textContent = step != null ? '$' + step.toFixed(2) : '—';
+    document.getElementById('bdStepPct').textContent = stepPct != null ? stepPct.toFixed(2) + '%' : '—';
   } catch (e) {
-    badge.textContent = '❌ Нет связи с VPS';
-    badge.classList.add('off');
+    toast('❌ Нет связи с VPS');
+  }
+}
+
+async function fetchBotLog() {
+  if (!currentBotDetailId) return;
+  const box = document.getElementById('bdLogBox');
+  try {
+    const r = await fetch(BOTS_API + '/' + currentBotDetailId + '/log?lines=80');
+    const d = await r.json();
+    box.textContent = (d.lines && d.lines.length) ? d.lines.join('\n') : 'Лог пока пуст';
+    box.scrollTop = box.scrollHeight;
+  } catch (e) {
+    box.textContent = 'Не удалось загрузить лог';
   }
 }
 
