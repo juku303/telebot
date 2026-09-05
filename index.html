@@ -105,6 +105,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .ac-copy{cursor:pointer;opacity:.7}
 .ac-copy:active{opacity:1}
 .ac-badge{font-family:var(--mono);font-size:10px;color:var(--muted);background:rgba(138,138,146,.15);border:1px solid rgba(138,138,146,.3);border-radius:8px;padding:3px 9px}
+.ac-badge.active{color:var(--accent);background:rgba(0,229,160,.12);border-color:rgba(0,229,160,.3)}
 .ac-pair-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
 .ac-pair-row h3{font-size:15px;font-weight:600;margin-bottom:2px}
 .ac-pair-row p{font-size:11px;color:var(--muted)}
@@ -192,7 +193,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <button class="btn-start" style="margin-top:8px" onclick="openPairPicker('futures')">Создать +</button>
 </div>
 
-<!-- ── Список спот-ботов (пока всегда пусто — спот не реализован) ── -->
+<!-- ── Список спот-ботов: та же структура (переключатель/поиск/карточки),
+     что и у фьючерсных, но обе вкладки честно пустые — спот-торговля пока
+     не реализована на бэкенде (нет ни конфигов, ни реестра ботов), поэтому
+     показывать тут нечего и придумывать цифры мы не будем. ── -->
 <div class="page" id="page-spot-list" style="display:none">
   <div class="back-row" onclick="closeSpotList()">← Назад к ботам</div>
   <div class="wizard-title">Спот боты</div>
@@ -202,7 +206,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <button class="toggle-pill" data-tab="archive">Архив</button>
   </div>
 
-  <div style="text-align:center; padding:60px 20px; color:var(--muted)">
+  <input class="search-input" id="spotSearch" placeholder="Поиск" oninput="filterSpotRows(this.value)">
+
+  <div id="spotActiveTab" style="text-align:center; padding:60px 20px; color:var(--muted)">
+    <div style="font-size:48px; margin-bottom:12px">💠</div>
+    <div>Боты не найдены</div>
+  </div>
+
+  <div id="spotArchiveTab" style="display:none; text-align:center; padding:60px 20px; color:var(--muted)">
     <div style="font-size:48px; margin-bottom:12px">💠</div>
     <div>Боты не найдены</div>
   </div>
@@ -385,15 +396,19 @@ function closeFuturesList() {
 function openSpotList() {
   document.getElementById('page-list').style.display = 'none';
   document.getElementById('page-spot-list').style.display = 'block';
+  spotTab = 'active';
+  document.querySelectorAll('#spotTabRow .toggle-pill').forEach(p => p.classList.toggle('active', p.dataset.tab === 'active'));
+  document.getElementById('spotActiveTab').style.display = 'block';
+  document.getElementById('spotArchiveTab').style.display = 'none';
+  document.getElementById('spotSearch').value = '';
 }
 function closeSpotList() {
   document.getElementById('page-spot-list').style.display = 'none';
   document.getElementById('page-list').style.display = 'block';
 }
 
-// Спот-архив пока не реализован — сама вкладка спота всегда пуста незав.
-// от переключателя. Футур-архив ниже — рабочий, тянет реальные остановленные
-// экземпляры из /api/bots.
+// Футур-таб: обе вкладки рабочие, тянут реальные экземпляры из /api/bots
+// (активные/остановленные — просто фильтр по running).
 let futuresTab = 'active';
 
 document.getElementById('futuresTabRow').addEventListener('click', e => {
@@ -410,12 +425,22 @@ document.getElementById('futuresTabRow').addEventListener('click', e => {
   if (isArchive) loadArchiveBots(); else filterFuturesRows('');
 });
 
+let spotTab = 'active';
 document.getElementById('spotTabRow').addEventListener('click', e => {
   const btn = e.target.closest('.toggle-pill');
   if (!btn) return;
   document.querySelectorAll('#spotTabRow .toggle-pill').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
+  spotTab = btn.dataset.tab;
+  document.getElementById('spotActiveTab').style.display = spotTab === 'archive' ? 'none' : 'block';
+  document.getElementById('spotArchiveTab').style.display = spotTab === 'archive' ? 'block' : 'none';
+  document.getElementById('spotSearch').value = '';
 });
+
+// Ничего не фильтрует по той же причине, что обе вкладки спота пусты (нет
+// бэкенда спот-ботов) — оставлено для структурного паритета с фьючерсами,
+// заработает само собой, как только появятся реальные карточки.
+function filterSpotRows(q) {}
 
 function filterFuturesRows(q) {
   const query = q.trim().toLowerCase();
@@ -430,11 +455,11 @@ function filterFuturesRows(q) {
     document.getElementById('archiveEmptyState').style.display = anyVisible ? 'none' : 'block';
     return;
   }
-  const rows = document.querySelectorAll('#futuresActiveTab .bot-row');
+  const rows = document.querySelectorAll('#futuresActiveTab .bot-row, #futuresActiveTab .archive-card');
   let anyVisible = false;
   rows.forEach(row => {
     const match = row.textContent.toLowerCase().includes(query);
-    row.style.display = match ? 'flex' : 'none';
+    row.style.display = match ? (row.classList.contains('archive-card') ? 'block' : 'flex') : 'none';
     if (match) anyVisible = true;
   });
   document.getElementById('futuresEmptyState').style.display = anyVisible ? 'none' : 'block';
@@ -452,6 +477,38 @@ function copyId(id) {
 
 /** Архив = остановленные экземпляры, созданные через мастер (легаси ETH-бот
  *  в реестр /api/bots не входит, у него нет id и отдельного архива). */
+/** Одна и та же карточка для активных и архивных фьючерс-ботов — отличаются
+ *  только бейджем статуса и наличием "Закрыт: ..." во второй строке дат. */
+function renderBotCard(b) {
+  const profit = b.profit || 0;
+  const dirClass = b.direction === 'Short' ? 'short' : 'long';
+  const badgeClass = 'ac-badge' + (b.running ? ' active' : '');
+  const badgeText = b.running ? 'Активен' : 'Остановлен';
+  const dates = 'Запуск: ' + formatDate(b.startTime) + (b.stoppedAt ? ' · Закрыт: ' + formatDate(b.stoppedAt) : '');
+  return `
+    <div class="archive-card" onclick="openBotDetail('${b.id}')">
+      <div class="ac-top">
+        <span class="ac-id">ID: ${b.id} <span class="ac-copy" onclick="event.stopPropagation(); copyId('${b.id}')">⧉</span></span>
+        <span class="${badgeClass}">${badgeText}</span>
+      </div>
+      <div class="ac-pair-row">
+        <div class="bot-icon" style="font-size:20px">${b.direction === 'Short' ? '🔻' : '🔺'}</div>
+        <div>
+          <h3>${b.symbol}</h3>
+          <p>${dates}</p>
+        </div>
+      </div>
+      <div class="sgrid" style="margin-bottom:10px">
+        <div class="scard"><div class="sval ac-dir ${dirClass}">${b.lowerPrice}–${b.upperPrice}</div><div class="slbl">${b.direction || '—'}</div></div>
+        <div class="scard"><div class="sval">${b.currentPrice != null ? b.currentPrice : '—'}</div><div class="slbl">Текущая цена</div></div>
+      </div>
+      <div class="sgrid">
+        <div class="scard"><div class="sval">${b.investmentUsdt != null ? '$' + b.investmentUsdt : '—'}</div><div class="slbl">Обеспечение</div></div>
+        <div class="scard"><div class="sval${profit < 0 ? ' neg' : ''}">${(profit >= 0 ? '+' : '') + '$' + profit.toFixed(2)}</div><div class="slbl">Прибыль сетки</div></div>
+      </div>
+    </div>`;
+}
+
 async function loadArchiveBots() {
   const list = document.getElementById('archiveList');
   const empty = document.getElementById('archiveEmptyState');
@@ -464,32 +521,7 @@ async function loadArchiveBots() {
       return;
     }
     empty.style.display = 'none';
-    list.innerHTML = bots.map(b => {
-      const profit = b.profit || 0;
-      const dirClass = b.direction === 'Short' ? 'short' : 'long';
-      return `
-      <div class="archive-card" onclick="openBotDetail('${b.id}')">
-        <div class="ac-top">
-          <span class="ac-id">ID: ${b.id} <span class="ac-copy" onclick="event.stopPropagation(); copyId('${b.id}')">⧉</span></span>
-          <span class="ac-badge">Остановлен</span>
-        </div>
-        <div class="ac-pair-row">
-          <div class="bot-icon" style="font-size:20px">${b.direction === 'Short' ? '🔻' : '🔺'}</div>
-          <div>
-            <h3>${b.symbol}</h3>
-            <p>Запуск: ${formatDate(b.startTime)}${b.stoppedAt ? ' · Закрыт: ' + formatDate(b.stoppedAt) : ''}</p>
-          </div>
-        </div>
-        <div class="sgrid" style="margin-bottom:10px">
-          <div class="scard"><div class="sval ac-dir ${dirClass}">${b.lowerPrice}–${b.upperPrice}</div><div class="slbl">${b.direction || '—'}</div></div>
-          <div class="scard"><div class="sval">${b.currentPrice != null ? b.currentPrice : '—'}</div><div class="slbl">Текущая цена</div></div>
-        </div>
-        <div class="sgrid">
-          <div class="scard"><div class="sval">${b.investmentUsdt != null ? '$' + b.investmentUsdt : '—'}</div><div class="slbl">Обеспечение</div></div>
-          <div class="scard"><div class="sval${profit < 0 ? ' neg' : ''}">${(profit >= 0 ? '+' : '') + '$' + profit.toFixed(2)}</div><div class="slbl">Прибыль сетки</div></div>
-        </div>
-      </div>`;
-    }).join('');
+    list.innerHTML = bots.map(renderBotCard).join('');
   } catch (e) {
     empty.textContent = '';
     empty.style.display = 'block';
@@ -758,16 +790,10 @@ async function loadCreatedBots() {
   try {
     const r = await fetch(BOTS_API);
     const bots = await r.json();
-    container.innerHTML = bots.map(b => `
-      <div class="bot-row" onclick="openBotDetail('${b.id}')">
-        <div class="bot-icon">${b.direction === 'Short' ? '🔻' : '🔺'}</div>
-        <div class="bot-info">
-          <h3>${b.symbol} · ${b.direction}</h3>
-          <p>${b.running ? '🟢 работает' : '⏸ остановлен'} · $${(b.profit || 0).toFixed(2)} · ${b.lowerPrice}–${b.upperPrice}</p>
-        </div>
-        <div class="chev">›</div>
-      </div>
-    `).join('');
+    // В "Активные" попадают только реально работающие — остановленные того
+    // же реестра показываются в "Архив" (loadArchiveBots), не одновременно
+    // в обеих вкладках.
+    container.innerHTML = bots.filter(b => b.running).map(renderBotCard).join('');
     if (listSub) listSub.textContent = (1 + bots.length) + ' бот' + (bots.length === 0 ? '' : 'ов');
   } catch (e) {
     // тихо — это дополнительный список, не критично, если не подгрузился
