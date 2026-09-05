@@ -1201,7 +1201,7 @@ function renderLevelViz(lower, upper, gridCount, gridType, gridCurvature) {
   for (let i = 0; i < levels.length; i++) {
     const y = (1 - (levels[i] - lower) / (upper - lower)) * (H - 2) + 1;
     const edge = i === 0 || i === levels.length - 1;
-    svgContent += `<line x1="${axisX}" y1="${y.toFixed(2)}" x2="${axisX + (edge ? tickLen + 40 : tickLen)}" y2="${y.toFixed(2)}" stroke="${edge ? 'var(--accent2)' : 'var(--accent)'}" stroke-width="${edge ? 2 : 1}" opacity="${edge ? 1 : 0.8}"/>`;
+    svgContent += `<line x1="${axisX}" y1="${y.toFixed(2)}" x2="${axisX + (edge ? tickLen + 40 : tickLen)}" y2="${y.toFixed(2)}" stroke="${edge ? '#7c5cff' : '#00e5a0'}" stroke-width="${edge ? 2 : 1}" opacity="${edge ? 1 : 0.8}"/>`;
   }
   svg.innerHTML = svgContent;
   countEl.textContent = levels.length + ' (' + { arithmetic: 'арифметическая', geometric: 'геометрическая', exponential: 'экспоненциальная' }[gridType] + ')';
