@@ -75,7 +75,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 .wizard-title{font-size:20px;font-weight:600;margin-bottom:16px}
 .tv-wrap{background:var(--card);border-radius:16px;overflow:hidden;margin-bottom:16px;height:280px}
-.tv-wrap #tv_chart,.tv-wrap #tv_chart2{height:100%}
+.tv-wrap #tv_chart,.tv-wrap #tv_chart2,.tv-wrap #tv_chart3{height:100%}
+.eye-btn{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--muted);font-size:12px;cursor:pointer;margin-bottom:10px;display:inline-flex;align-items:center;gap:6px}
+.eye-btn:active{background:#1f1f22}
 
 .toggle-row{display:flex;background:var(--card);border-radius:14px;padding:4px;margin-bottom:16px}
 .toggle-pill{flex:1;text-align:center;padding:10px;border-radius:11px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;background:none;border:none}
@@ -97,6 +99,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .level-viz-label{font-size:11px;color:var(--muted);margin-bottom:8px}
 #levelViz{width:100%;height:160px;display:block}
 .level-viz-scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px}
+.pair-chip-row{display:flex;gap:10px;margin-bottom:16px}
+.pair-chip{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer}
+.pair-chip.active{border-color:var(--accent2);color:var(--text);background:rgba(124,92,255,.12)}
+.pair-chip-coin{width:24px;height:24px;border-radius:50%;background:#627eea;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.invest-icon{width:32px;height:32px;border-radius:50%;background:#26a17b;color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .range-box label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px}
 .range-box input{width:100%;background:none;border:none;color:var(--text);font-family:var(--mono);font-size:16px;font-weight:700}
 .range-box input:focus{outline:none}
@@ -400,7 +407,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <div class="back-row" onclick="closeRange()">← Назад</div>
   <div class="wizard-title" id="rangeTitle">Создание фьючерс бота</div>
 
-  <div class="tv-wrap"><div id="tv_chart"></div></div>
+  <button type="button" class="eye-btn" id="eyeBtn1" onclick="toggleChart('tvWrap1', 'eyeBtn1')">👁 Скрыть график</button>
+  <div class="tv-wrap" id="tvWrap1"><div id="tv_chart"></div></div>
 
   <div class="dir-row" id="dirRow">
     <button class="dir-pill short active" data-dir="Short">Short ↘</button>
@@ -429,7 +437,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <div class="back-row" onclick="backToRange()">← Назад</div>
   <div class="wizard-title" id="gridTitle">Создание фьючерс бота</div>
 
-  <div class="tv-wrap"><div id="tv_chart2"></div></div>
+  <button type="button" class="eye-btn" id="eyeBtn2" onclick="toggleChart('tvWrap2', 'eyeBtn2')">👁 Скрыть график</button>
+  <div class="tv-wrap" id="tvWrap2"><div id="tv_chart2"></div></div>
 
   <div class="level-viz-wrap">
     <div class="level-viz-label">Уровни сетки: <span id="levelVizCount">—</span></div>
@@ -477,16 +486,55 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <div class="wizard-nav">
     <button onclick="backToRange()">‹ Назад</button>
     <span style="font-size:12px;color:var(--muted);font-family:var(--mono)">Шаг 2 из 4</span>
-    <button class="next" id="step2NextBtn" onclick="goToFinalizeStep()">Далее ›</button>
+    <button class="next" id="step2NextBtn" onclick="goToInvestStep()">Далее ›</button>
+  </div>
+</div>
+
+<!-- ── Мастер создания: шаг 3 из 4 — инвестиции ── -->
+<div class="page" id="page-invest" style="display:none">
+  <div class="back-row" onclick="backToGridStep()">← Назад</div>
+  <div class="wizard-title" id="investTitle">Создание фьючерс бота</div>
+
+  <button type="button" class="eye-btn" id="eyeBtn3" onclick="toggleChart('tvWrap3', 'eyeBtn3')">👁 Скрыть график</button>
+  <div class="tv-wrap" id="tvWrap3"><div id="tv_chart3"></div></div>
+
+  <div class="pair-chip-row" id="pairChipRow">
+    <button type="button" class="pair-chip active" data-denom="base" id="pairChipBase">
+      <span class="pair-chip-coin" id="pairChipBaseCoin">ETH</span><span id="pairChipBaseLabel">ETH</span>
+    </button>
+    <button type="button" class="pair-chip" data-denom="quote" id="pairChipQuote">
+      <span class="pair-chip-coin" style="background:#26a17b">₮</span>USDT
+    </button>
+  </div>
+
+  <div class="range-box" style="margin-bottom:16px">
+    <label>Сумма инвестиции</label>
+    <div class="stepper-row">
+      <button type="button" class="stepper-btn" onclick="adjustInvestAmount(-1)">−</button>
+      <span class="invest-icon" id="investIcon">₮</span>
+      <input id="investAmountInput" type="number" step="0.01">
+      <button type="button" class="stepper-btn" onclick="adjustInvestAmount(1)">+</button>
+    </div>
+  </div>
+
+  <div class="readonly-box">
+    <label>Доступно USDT (Единый торговый)</label>
+    <div class="rval" id="availableBalanceVal">—</div>
+  </div>
+
+  <div class="wizard-nav">
+    <button onclick="backToGridStep()">‹ Назад</button>
+    <span style="font-size:12px;color:var(--muted);font-family:var(--mono)">Шаг 3 из 4</span>
+    <button class="next" id="step3NextBtn" onclick="goToFinalizeStep()">Далее ›</button>
   </div>
 </div>
 
 <!-- ── Мастер создания: временная заглушка для оставшихся полей (объём,
-     проверка комиссии, запуск) — реальные шаги 3-4 ещё не спроектированы,
+     проверка комиссии, запуск) — реальный шаг 4 ещё не спроектирован,
      это не претендует быть финальным дизайном, просто чтобы бот было чем
      реально создать прямо сейчас. ── -->
 <div class="page" id="page-finalize" style="display:none">
-  <div class="back-row" onclick="backToGridStep()">← Назад</div>
+  <div class="back-row" onclick="backToInvestStep()">← Назад</div>
   <div class="wizard-title" id="finalizeTitle">Создание фьючерс бота</div>
 
   <div class="range-inputs">
@@ -496,7 +544,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <div class="fee-check" id="feeCheck"></div>
 
   <div class="wizard-nav">
-    <button onclick="backToGridStep()">‹ Назад</button>
+    <button onclick="backToInvestStep()">‹ Назад</button>
     <span id="createStatus"></span>
     <button class="next" id="nextBtn" onclick="confirmRangeStep()">Создать бота</button>
   </div>
@@ -859,9 +907,12 @@ let wizardGridType = 'arithmetic';
 let wizardGridCurvature = 2;
 let tvWidget = null;
 let tvWidget2 = null;
+let tvWidget3 = null;
+let wizardInvestDenom = 'quote';
+let wizardLastPrice = null;
 
 function hideAllPages() {
-  ['page-list', 'page-futures-list', 'page-spot-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range', 'page-grid', 'page-finalize']
+  ['page-list', 'page-futures-list', 'page-spot-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range', 'page-grid', 'page-invest', 'page-finalize']
     .forEach(id => document.getElementById(id).style.display = 'none');
 }
 
@@ -932,8 +983,21 @@ function selectPair(symbol) {
   document.getElementById('orderSizeInput').value = symbol === 'BTCUSDT' ? 0.001 : 0.01;
   document.getElementById('createStatus').textContent = '';
   document.querySelectorAll('#gridTypeRow .toggle-pill').forEach(p => p.classList.toggle('active', p.dataset.gtype === 'arithmetic'));
+  // Сбрасываем видимость графика на случай, если в прошлый заход мастера
+  // пользователь его скрыл — иначе TradingView может отрендериться в
+  // скрытый (display:none) контейнер и остаться "схлопнутым".
+  document.getElementById('tvWrap1').style.display = 'block';
+  document.getElementById('eyeBtn1').textContent = '👁 Скрыть график';
   renderChart('tv_chart', symbol, w => tvWidget = w);
   loadWizardFeeRate(symbol);
+}
+
+function toggleChart(wrapId, btnId) {
+  const wrap = document.getElementById(wrapId);
+  const btn = document.getElementById(btnId);
+  const isHidden = wrap.style.display === 'none';
+  wrap.style.display = isHidden ? 'block' : 'none';
+  btn.textContent = isHidden ? '👁 Скрыть график' : '🚫 Показать график';
 }
 
 function renderChart(containerId, symbol, setWidget) {
@@ -1102,6 +1166,8 @@ function goToGridStep() {
   document.getElementById('upperInput2').value = upper;
   document.getElementById('page-range').style.display = 'none';
   document.getElementById('page-grid').style.display = 'block';
+  document.getElementById('tvWrap2').style.display = 'block';
+  document.getElementById('eyeBtn2').textContent = '👁 Скрыть график';
   renderChart('tv_chart2', wizardSymbol, w => tvWidget2 = w);
   updateSecondaryParamUI();
   computeStepDisplay();
@@ -1112,18 +1178,124 @@ function backToRange() {
   document.getElementById('page-range').style.display = 'block';
 }
 
-function goToFinalizeStep() {
+/** Шаг 2 → шаг 3 (инвестиции): валидируем сетку, готовим пару/иконки под
+ *  выбранный на шаге 1 символ и тянем реальные цену и баланс с биржи. */
+function goToInvestStep() {
   if (!gridFeeOk) {
     toast('Сначала исправьте диапазон/тип/число сеток — сетка убыточна после комиссии');
     return;
   }
   document.getElementById('page-grid').style.display = 'none';
+  document.getElementById('page-invest').style.display = 'block';
+  document.getElementById('tvWrap3').style.display = 'block';
+  document.getElementById('eyeBtn3').textContent = '👁 Скрыть график';
+  renderChart('tv_chart3', wizardSymbol, w => tvWidget3 = w);
+  setupInvestStep();
+}
+function backToGridStep() {
+  document.getElementById('page-invest').style.display = 'none';
+  document.getElementById('page-grid').style.display = 'block';
+}
+
+function goToFinalizeStep() {
+  document.getElementById('page-invest').style.display = 'none';
   document.getElementById('page-finalize').style.display = 'block';
   checkGridFee();
 }
-function backToGridStep() {
+function backToInvestStep() {
   document.getElementById('page-finalize').style.display = 'none';
-  document.getElementById('page-grid').style.display = 'block';
+  document.getElementById('page-invest').style.display = 'block';
+}
+
+function baseCoinMeta(symbol) {
+  return symbol === 'BTCUSDT'
+    ? { code: 'BTC', icon: '₿', color: '#f7931a', step: 0.001 }
+    : { code: 'ETH', icon: 'Ξ', color: '#627eea', step: 0.01 };
+}
+
+/** Заходим на шаг 3 — настраиваем чипы под выбранный на шаге 1 символ,
+ *  сбрасываем к денoминации USDT по умолчанию и тянем реальные цену и
+ *  доступный баланс с биржи (не оценки/заглушки). */
+function setupInvestStep() {
+  const meta = baseCoinMeta(wizardSymbol);
+  document.getElementById('investTitle').textContent =
+    'Создание фьючерс бота · ' + wizardSymbol.replace('USDT', '/USDT');
+  document.getElementById('pairChipBaseCoin').textContent = meta.icon;
+  document.getElementById('pairChipBaseCoin').style.background = meta.color;
+  document.getElementById('pairChipBaseLabel').textContent = meta.code;
+
+  wizardInvestDenom = 'quote';
+  document.getElementById('pairChipBase').classList.remove('active');
+  document.getElementById('pairChipQuote').classList.add('active');
+  document.getElementById('investIcon').textContent = '₮';
+  document.getElementById('investIcon').style.background = '#26a17b';
+  if (!document.getElementById('investAmountInput').value) {
+    document.getElementById('investAmountInput').value = 100;
+  }
+
+  wizardLastPrice = null;
+  fetch(API_BASE + '/api/price?symbol=' + wizardSymbol)
+    .then(r => r.json())
+    .then(d => { if (d.price != null) wizardLastPrice = d.price; })
+    .catch(() => {});
+
+  const balEl = document.getElementById('availableBalanceVal');
+  balEl.textContent = 'загрузка…';
+  fetch(API_BASE + '/api/available-balance')
+    .then(r => r.json())
+    .then(d => { balEl.textContent = d.available != null ? '$' + d.available.toFixed(2) : '—'; })
+    .catch(() => { balEl.textContent = '—'; });
+}
+
+document.getElementById('pairChipRow').addEventListener('click', e => {
+  const btn = e.target.closest('.pair-chip');
+  if (!btn) return;
+  const newDenom = btn.dataset.denom;
+  if (newDenom === wizardInvestDenom) return;
+
+  const amountInput = document.getElementById('investAmountInput');
+  const cur = parseFloat(amountInput.value);
+  const meta = baseCoinMeta(wizardSymbol);
+
+  // Конвертируем уже введённую сумму в новую деноминацию по последней
+  // реальной цене — если цена ещё не подгрузилась, просто меняем иконку,
+  // сумму пользователь поправит сам.
+  if (Number.isFinite(cur) && wizardLastPrice) {
+    amountInput.value = newDenom === 'base'
+      ? (cur / wizardLastPrice).toFixed(6)
+      : (cur * wizardLastPrice).toFixed(2);
+  }
+
+  wizardInvestDenom = newDenom;
+  document.getElementById('pairChipBase').classList.toggle('active', newDenom === 'base');
+  document.getElementById('pairChipQuote').classList.toggle('active', newDenom === 'quote');
+  const icon = document.getElementById('investIcon');
+  if (newDenom === 'base') {
+    icon.textContent = meta.icon;
+    icon.style.background = meta.color;
+  } else {
+    icon.textContent = '₮';
+    icon.style.background = '#26a17b';
+  }
+});
+
+function adjustInvestAmount(dir) {
+  const meta = baseCoinMeta(wizardSymbol);
+  const input = document.getElementById('investAmountInput');
+  const step = wizardInvestDenom === 'base' ? meta.step : 10;
+  const cur = parseFloat(input.value) || 0;
+  const next = Math.max(0, cur + dir * step);
+  input.value = wizardInvestDenom === 'base' ? next.toFixed(6) : next.toFixed(2);
+}
+
+/** Сумма инвестиции в USDT независимо от того, в какой валюте пользователь
+ *  её вводил на шаге 3 — единственное, что реально принимает бэкенд. */
+function getInvestmentUsdt() {
+  const amount = parseFloat(document.getElementById('investAmountInput').value) || 0;
+  if (wizardInvestDenom === 'base' && wizardLastPrice) {
+    return amount * wizardLastPrice;
+  }
+  return amount;
 }
 
 /**
@@ -1305,7 +1477,7 @@ async function confirmRangeStep() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id, symbol: wizardSymbol, direction: wizardDirection, gridType: wizardGridType, gridCurvature: wizardGridCurvature,
-        lowerPrice, upperPrice, gridCount, orderSizeEth,
+        lowerPrice, upperPrice, gridCount, orderSizeEth, investmentUsdt: getInvestmentUsdt(),
       }),
     });
     const result = await r.json();
