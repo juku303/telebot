@@ -91,6 +91,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .readonly-box label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px}
 .readonly-box .rval{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--text)}
 .btn-stub{width:100%;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;color:var(--muted);font-size:14px;text-align:left;margin-bottom:16px;cursor:not-allowed;opacity:.6;display:flex;justify-content:space-between;align-items:center}
+.range-box.disabled{opacity:.45}
+.range-box.disabled input,.range-box.disabled .stepper-btn{pointer-events:none}
 .range-box label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px}
 .range-box input{width:100%;background:none;border:none;color:var(--text);font-family:var(--mono);font-size:16px;font-weight:700}
 .range-box input:focus{outline:none}
@@ -443,6 +445,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <div class="readonly-box">
     <label>Шаг цены (расчётный — меняется только при указании стартовой цены вместо диапазона)</label>
     <div class="rval" id="stepPriceVal">—</div>
+  </div>
+
+  <div class="range-box" id="secondaryParamBox" style="margin-bottom:16px">
+    <label id="secondaryParamLabel">Шаг в %</label>
+    <div class="stepper-row">
+      <button type="button" class="stepper-btn" id="secondaryParamMinus" onclick="adjustSecondaryParam(-1)">−</button>
+      <input id="secondaryParamInput" type="number" step="0.01">
+      <button type="button" class="stepper-btn" id="secondaryParamPlus" onclick="adjustSecondaryParam(1)">+</button>
+    </div>
+    <div id="secondaryParamHint" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
   </div>
 
   <div class="range-inputs">
@@ -834,6 +846,7 @@ let wizardSymbol = null;
 let wizardDirection = 'Short';
 let wizardMode = 'range';
 let wizardGridType = 'arithmetic';
+let wizardGridCurvature = 2;
 let tvWidget = null;
 let tvWidget2 = null;
 
@@ -883,6 +896,7 @@ async function loadWizardFeeRate(symbol) {
 function selectPair(symbol) {
   wizardSymbol = symbol;
   wizardGridType = 'arithmetic';
+  wizardGridCurvature = 2;
   document.getElementById('page-pair').style.display = 'none';
   document.getElementById('page-range').style.display = 'block';
   const title = 'Создание фьючерс бота · ' + symbol.replace('USDT', '/USDT');
@@ -946,6 +960,7 @@ document.getElementById('gridTypeRow').addEventListener('click', e => {
   document.querySelectorAll('#gridTypeRow .toggle-pill').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   wizardGridType = btn.dataset.gtype;
+  updateSecondaryParamUI();
   computeStepDisplay();
   checkGridFee();
 });
@@ -954,8 +969,101 @@ function adjustGridCount(delta) {
   const el = document.getElementById('gridCountInput');
   const v = Math.max(2, Math.min(200, (parseInt(el.value, 10) || 33) + delta));
   el.value = v;
+  // При geometric количество сеток и "Шаг в %" однозначно определяют друг
+  // друга при фиксированном диапазоне — меняем count, обновляем и % (в одну
+  // сторону, без обратного пересчёта count, иначе будет дребезг).
+  if (wizardGridType === 'geometric') refreshGeometricPctFromCount();
   computeStepDisplay();
   checkGridFee();
+}
+
+/**
+ * Второе поле шага 2 меняет смысл в зависимости от типа сетки (как в
+ * реальном мастере Bybit):
+ *  - arithmetic: нет отдельного управляемого параметра — поле неактивно.
+ *  - geometric: "Шаг в %" — реальный процент между уровнями. Диапазон
+ *    зафиксирован, так что редактирование % пересчитывает количество
+ *    сеток (округляя до целого), а не наоборот.
+ *  - exponential: "Коэффициент прогрессии" — независимый параметр формы
+ *    кривой (не выводится из диапазона/count), напрямую уходит в config
+ *    бота как gridCurvature.
+ */
+function updateSecondaryParamUI() {
+  const box = document.getElementById('secondaryParamBox');
+  const label = document.getElementById('secondaryParamLabel');
+  const input = document.getElementById('secondaryParamInput');
+  const hint = document.getElementById('secondaryParamHint');
+
+  if (wizardGridType === 'arithmetic') {
+    box.classList.add('disabled');
+    label.textContent = 'Шаг в %';
+    input.value = '';
+    input.disabled = true;
+    hint.textContent = 'Доступно только для геометрической и экспоненциальной сетки';
+  } else if (wizardGridType === 'geometric') {
+    box.classList.remove('disabled');
+    label.textContent = 'Шаг в %';
+    input.disabled = false;
+    input.step = '0.001';
+    hint.textContent = 'Диапазон зафиксирован — меняя процент, вы меняете количество сеток';
+    refreshGeometricPctFromCount();
+  } else {
+    box.classList.remove('disabled');
+    label.textContent = 'Коэффициент прогрессии';
+    input.disabled = false;
+    input.step = '0.1';
+    input.value = wizardGridCurvature;
+    hint.textContent = 'Больше значение — сильнее уровни сгущаются у нижней границы диапазона';
+  }
+}
+
+/** count → % (одностороннее обновление отображения, без изменения count) */
+function refreshGeometricPctFromCount() {
+  const lower = parseFloat(document.getElementById('lowerInput2').value);
+  const upper = parseFloat(document.getElementById('upperInput2').value);
+  const gridCount = parseInt(document.getElementById('gridCountInput').value, 10);
+  const input = document.getElementById('secondaryParamInput');
+  if (!lower || !upper || !gridCount || upper <= lower) return;
+  const ratio = Math.pow(upper / lower, 1 / gridCount);
+  input.value = ((ratio - 1) * 100).toFixed(3);
+}
+
+function onSecondaryParamInput() {
+  const input = document.getElementById('secondaryParamInput');
+  const val = parseFloat(input.value);
+
+  if (wizardGridType === 'geometric') {
+    const lower = parseFloat(document.getElementById('lowerInput2').value);
+    const upper = parseFloat(document.getElementById('upperInput2').value);
+    if (!lower || !upper || upper <= lower || !(val > 0)) return;
+    const ratio = 1 + val / 100;
+    let n = Math.round(Math.log(upper / lower) / Math.log(ratio));
+    n = Math.max(2, Math.min(200, n));
+    document.getElementById('gridCountInput').value = n;
+    // После округления n реально достижимый % чуть отличается от введённого —
+    // отражаем честное значение, а не то, что пользователь напечатал.
+    const actualRatio = Math.pow(upper / lower, 1 / n);
+    input.value = ((actualRatio - 1) * 100).toFixed(3);
+  } else if (wizardGridType === 'exponential') {
+    if (!(val > 0)) return;
+    wizardGridCurvature = Math.max(0.1, Math.min(5, val));
+  } else {
+    return;
+  }
+  computeStepDisplay();
+  checkGridFee();
+}
+document.getElementById('secondaryParamInput').addEventListener('input', onSecondaryParamInput);
+
+function adjustSecondaryParam(dir) {
+  if (wizardGridType === 'arithmetic') return;
+  const input = document.getElementById('secondaryParamInput');
+  const step = wizardGridType === 'geometric' ? 0.01 : 0.1;
+  const min = wizardGridType === 'geometric' ? 0.001 : 0.1;
+  const max = wizardGridType === 'geometric' ? 50 : 5;
+  const cur = parseFloat(input.value) || (wizardGridType === 'geometric' ? 0.1 : 2);
+  input.value = Math.max(min, Math.min(max, +(cur + dir * step).toFixed(3)));
+  onSecondaryParamInput();
 }
 
 /** Шаг 1 → шаг 2: переносим введённый диапазон в поля шага 2 и валидируем,
@@ -972,6 +1080,7 @@ function goToGridStep() {
   document.getElementById('page-range').style.display = 'none';
   document.getElementById('page-grid').style.display = 'block';
   renderChart('tv_chart2', wizardSymbol, w => tvWidget2 = w);
+  updateSecondaryParamUI();
   computeStepDisplay();
   checkGridFee();
 }
@@ -1002,13 +1111,13 @@ function backToGridStep() {
  * поменяете формулу там, поменяйте и здесь, иначе предпросмотр разъедется
  * с реальным поведением.
  */
-function calcGridLevelsClient(lowerPrice, upperPrice, gridCount, gridType) {
+function calcGridLevelsClient(lowerPrice, upperPrice, gridCount, gridType, gridCurvature) {
   const levels = [];
   if (gridType === 'geometric') {
     const ratio = Math.pow(upperPrice / lowerPrice, 1 / gridCount);
     for (let i = 0; i <= gridCount; i++) levels.push(lowerPrice * Math.pow(ratio, i));
   } else if (gridType === 'exponential') {
-    const k = 2, denom = Math.exp(k) - 1;
+    const k = gridCurvature > 0 ? gridCurvature : 2, denom = Math.exp(k) - 1;
     for (let i = 0; i <= gridCount; i++) {
       const frac = (Math.exp(k * i / gridCount) - 1) / denom;
       levels.push(lowerPrice + (upperPrice - lowerPrice) * frac);
@@ -1023,8 +1132,8 @@ function calcGridLevelsClient(lowerPrice, upperPrice, gridCount, gridType) {
 /** Худший (минимальный) и лучший (максимальный) % шаг между соседними
  *  уровнями — для arithmetic и geometric они почти совпадают (у geometric
  *  побитово равны), для exponential честно показываем диапазон. */
-function minMaxStepPct(lower, upper, gridCount, gridType) {
-  const levels = calcGridLevelsClient(lower, upper, gridCount, gridType);
+function minMaxStepPct(lower, upper, gridCount, gridType, gridCurvature) {
+  const levels = calcGridLevelsClient(lower, upper, gridCount, gridType, gridCurvature);
   let min = Infinity, max = -Infinity;
   for (let i = 1; i < levels.length; i++) {
     const step = levels[i] - levels[i - 1];
@@ -1042,7 +1151,19 @@ function computeStepDisplay() {
   const gridCount = parseInt(document.getElementById('gridCountInput').value, 10);
   const el = document.getElementById('stepPriceVal');
   if (!lower || !upper || !gridCount || upper <= lower) { el.textContent = '—'; return; }
-  const { min, max } = minMaxStepPct(lower, upper, gridCount, wizardGridType);
+  // Для geometric показываем ТОТ ЖЕ % (ratio-1), что и поле "Шаг в %" —
+  // иначе два числа "процентного шага" на одном экране отличались бы на
+  // тысячные из-за разных математических соглашений (по середине пары
+  // уровней здесь vs по нижнему уровню пары в поле % ниже) и выглядели бы
+  // как баг. Для fee-check (checkGridFee) по-прежнему используется честный
+  // худший-случай по середине пары — это отдельная величина для другой цели
+  // (запас прочности по комиссии), ей смешение не грозит.
+  if (wizardGridType === 'geometric') {
+    const ratio = Math.pow(upper / lower, 1 / gridCount);
+    el.textContent = ((ratio - 1) * 100).toFixed(3) + '%';
+    return;
+  }
+  const { min, max } = minMaxStepPct(lower, upper, gridCount, wizardGridType, wizardGridCurvature);
   el.textContent = Math.abs(max - min) < 0.005
     ? min.toFixed(3) + '%'
     : min.toFixed(3) + '% — ' + max.toFixed(3) + '%';
@@ -1073,7 +1194,7 @@ function checkGridFee() {
     return;
   }
 
-  const { min: stepPct } = minMaxStepPct(lower, upper, gridCount, wizardGridType);
+  const { min: stepPct } = minMaxStepPct(lower, upper, gridCount, wizardGridType, wizardGridCurvature);
   const feeRoundTripPct = 2 * feeRatePct;
   const netMarginPct = stepPct - feeRoundTripPct;
   gridFeeOk = netMarginPct > 0;
@@ -1118,7 +1239,7 @@ async function confirmRangeStep() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id, symbol: wizardSymbol, direction: wizardDirection, gridType: wizardGridType,
+        id, symbol: wizardSymbol, direction: wizardDirection, gridType: wizardGridType, gridCurvature: wizardGridCurvature,
         lowerPrice, upperPrice, gridCount, orderSizeEth,
       }),
     });
