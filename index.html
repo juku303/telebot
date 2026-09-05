@@ -47,6 +47,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 .detail-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px}
 .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.sgrid3{grid-template-columns:1fr 1fr 1fr}
+.accent-card{background:rgba(124,92,255,.12);border:1px solid rgba(124,92,255,.3);border-radius:12px;padding:14px;display:flex;flex-direction:column;justify-content:center}
+.bd-split{display:flex;gap:10px;margin-bottom:10px;align-items:stretch}
+.bd-split>.accent-card{flex:1}
+.bd-split-right{flex:1;display:flex;flex-direction:column;gap:10px}
+.bd-split-right .sgrid{margin-bottom:0;flex:1}
+.bd-split-right .scard{flex:1;display:flex;flex-direction:column;justify-content:center}
+.bd-header-art{background:radial-gradient(circle at 88% 15%, rgba(124,92,255,.4), transparent 55%), linear-gradient(165deg, #201a38 0%, #15121f 55%, #0c0c0e 100%)}
 .scard{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}
 .sval{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--text);line-height:1;margin-bottom:4px}
 .sval.neg{color:var(--red)}
@@ -266,11 +274,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 <div class="page" id="page-bot-detail" style="display:none">
   <div class="back-row" onclick="closeBotDetail()">← Назад к списку</div>
 
-  <div class="detail-card">
+  <div class="detail-card bd-header-art">
     <span class="ac-badge" id="bdStatusBadge">—</span>
-    <div style="font-size:20px;font-weight:600;margin:10px 0 2px" id="bdTitle">—</div>
+    <div style="font-size:20px;font-weight:600;margin:10px 0 2px">Фьючерс Бот</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px" id="bdDates">—</div>
     <div class="ac-id">ID: <span id="bdIdText">—</span> <span class="ac-copy" onclick="copyId(currentBotDetailId)">⧉</span></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">Открытых ордеров на бирже: <span style="color:var(--text)" id="bdOrders">—</span></div>
   </div>
 
   <div class="toggle-row" id="bdTabRow">
@@ -279,34 +288,48 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   </div>
 
   <div id="bdDetailsTab">
-    <div class="sgrid">
+    <div class="sgrid sgrid3">
       <div class="scard"><div class="sval" id="bdProfit">—</div><div class="slbl">Общая прибыль</div></div>
       <div class="scard"><div class="sval" id="bdRoi">—</div><div class="slbl">ROI</div></div>
+      <div class="scard"><div class="sval" id="bdApr0">—</div><div class="slbl">APR</div></div>
     </div>
 
     <div class="section-title">Основная информация</div>
-    <div class="sgrid">
+    <div class="sgrid sgrid3">
       <div class="scard"><div class="sval" id="bdSymbol">—</div><div class="slbl">Пара</div></div>
       <div class="scard"><div class="sval" id="bdVolume">—</div><div class="slbl">Объём</div></div>
-    </div>
-    <div class="sgrid">
       <div class="scard"><div class="sval" id="bdCollateral">—</div><div class="slbl">Обеспечение</div></div>
-      <div class="scard"><div class="sval ac-dir" id="bdDirection">—</div><div class="slbl">Направление</div></div>
     </div>
-    <div class="sgrid">
-      <div class="scard" style="grid-column:1 / -1"><div class="sval" id="bdDuration">—</div><div class="slbl">Время выполнения</div></div>
+    <div class="bd-split">
+      <div class="accent-card">
+        <div class="sval" id="bdRealizedPnl1" style="font-size:22px">—</div>
+        <div class="slbl">Общая прибыль</div>
+      </div>
+      <div class="bd-split-right">
+        <div class="sgrid">
+          <div class="scard"><div class="sval ac-dir" id="bdDirection">—</div><div class="slbl">Направление</div></div>
+          <div class="scard"><div class="sval" id="bdDuration">—</div><div class="slbl">Время выполнения</div></div>
+        </div>
+        <div class="scard"><div class="sval" id="bdLeverage">—</div><div class="slbl">Плечо</div></div>
+      </div>
     </div>
 
     <div class="section-title">Эффективность</div>
-    <div class="detail-card" style="background:rgba(124,92,255,.12);border-color:rgba(124,92,255,.3);margin-bottom:10px">
-      <div class="sval" id="bdRealizedPnl" style="font-size:22px">—</div>
-      <div class="slbl">Реализованный PnL</div>
+    <div class="bd-split">
+      <div class="accent-card">
+        <div class="sval" id="bdRealizedPnl2" style="font-size:22px">—</div>
+        <div class="slbl">Реализованный PnL</div>
+      </div>
+      <div class="bd-split-right">
+        <div class="sgrid">
+          <div class="scard"><div class="sval" id="bdFees">—</div><div class="slbl">Общая комиссия</div></div>
+          <div class="scard"><div class="sval" id="bdGridProfit">—</div><div class="slbl">Прибыль сетки</div></div>
+        </div>
+        <div class="scard"><div class="sval" id="bdFilled">—</div><div class="slbl">Сеток исполнено</div></div>
+      </div>
     </div>
-    <div class="sgrid">
-      <div class="scard"><div class="sval" id="bdOrders">—</div><div class="slbl">Открытых ордеров</div></div>
-      <div class="scard"><div class="sval" id="bdFilled">—</div><div class="slbl">Исполнено сделок</div></div>
-    </div>
-    <div class="sgrid">
+    <div class="sgrid sgrid3">
+      <div class="scard"><div class="sval" id="bdTotalPnl">—</div><div class="slbl">Общий PnL</div></div>
       <div class="scard"><div class="sval" id="bdRoi2">—</div><div class="slbl">ROI</div></div>
       <div class="scard"><div class="sval" id="bdApr">—</div><div class="slbl">APR</div></div>
     </div>
@@ -316,13 +339,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
       <div class="scard"><div class="sval">Bybit</div><div class="slbl">Аккаунт</div></div>
       <div class="scard"><div class="sval" id="bdGridType">—</div><div class="slbl">Сеток</div></div>
     </div>
-    <div class="sgrid">
-      <div class="scard"><div class="sval" id="bdUpper">—</div><div class="slbl">Верхняя граница</div></div>
-      <div class="scard"><div class="sval" id="bdLower">—</div><div class="slbl">Нижняя граница</div></div>
-    </div>
-    <div class="sgrid">
-      <div class="scard"><div class="sval" id="bdStepAbs">—</div><div class="slbl">Шаг цены</div></div>
-      <div class="scard"><div class="sval" id="bdStepPct">—</div><div class="slbl">Шаг цены, %</div></div>
+    <div class="bd-split">
+      <div class="accent-card">
+        <div class="sval" id="bdUpper" style="margin-bottom:2px">—</div>
+        <div class="slbl" style="margin-bottom:10px">Верхняя граница</div>
+        <div class="sval" id="bdLower" style="margin-bottom:2px">—</div>
+        <div class="slbl">Нижняя граница</div>
+      </div>
+      <div class="bd-split-right">
+        <div class="scard"><div class="sval" id="bdStepPct">—</div><div class="slbl">Шаг цены, %</div></div>
+        <div class="scard"><div class="sval" id="bdStepAbs">—</div><div class="slbl">Шаг цены</div></div>
+      </div>
     </div>
   </div>
 
@@ -643,21 +670,33 @@ async function fetchBotDetail() {
 
     document.getElementById('bdStatusBadge').textContent = d.running ? 'Активен' : 'Остановлен';
     document.getElementById('bdStatusBadge').className = 'ac-badge' + (d.running ? ' active' : '');
-    document.getElementById('bdTitle').textContent = d.symbol + ' · ' + d.direction;
     document.getElementById('bdDates').textContent =
       'Запуск: ' + formatDate(d.startTime) + (d.stoppedAt ? ' · Закрыт: ' + formatDate(d.stoppedAt) : '');
     document.getElementById('bdIdText').textContent = currentBotDetailId;
+    document.getElementById('bdOrders').textContent = d.openOrders || 0;
 
     const profitStr = (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2);
+    const profitClass = 'sval' + (profit < 0 ? ' neg' : '');
     document.getElementById('bdProfit').textContent = profitStr;
-    document.getElementById('bdProfit').className = 'sval' + (profit < 0 ? ' neg' : '');
-    document.getElementById('bdRealizedPnl').textContent = profitStr;
-    document.getElementById('bdRealizedPnl').className = 'sval' + (profit < 0 ? ' neg' : '') ;
-    document.getElementById('bdRealizedPnl').style.fontSize = '22px';
+    document.getElementById('bdProfit').className = profitClass;
+    document.getElementById('bdRealizedPnl1').textContent = profitStr;
+    document.getElementById('bdRealizedPnl1').className = profitClass;
+    document.getElementById('bdRealizedPnl2').textContent = profitStr;
+    document.getElementById('bdRealizedPnl2').className = profitClass;
+    document.getElementById('bdGridProfit').textContent = profitStr;
+    document.getElementById('bdTotalPnl').textContent = profitStr;
+
     const roiStr = roi != null ? (roi >= 0 ? '+' : '') + roi.toFixed(2) + '%' : '—';
+    const aprStr = apr != null ? (apr >= 0 ? '+' : '') + apr.toFixed(1) + '%' : '—';
     document.getElementById('bdRoi').textContent = roiStr;
     document.getElementById('bdRoi2').textContent = roiStr;
-    document.getElementById('bdApr').textContent = apr != null ? (apr >= 0 ? '+' : '') + apr.toFixed(1) + '%' : '—';
+    document.getElementById('bdApr0').textContent = aprStr;
+    document.getElementById('bdApr').textContent = aprStr;
+
+    // "Общая комиссия" из референса Bybit сюда честно не попадает — мы
+    // нигде не считаем и не храним фактически уплаченные комиссии по
+    // сделкам, а придумывать цифру не будем.
+    document.getElementById('bdFees').textContent = '—';
 
     document.getElementById('bdSymbol').textContent = d.symbol || '—';
     document.getElementById('bdVolume').textContent = investment > 0 ? '$' + investment : '—';
@@ -666,8 +705,7 @@ async function fetchBotDetail() {
     dirEl.textContent = d.direction || '—';
     dirEl.className = 'sval ac-dir' + (d.direction === 'Short' ? ' short' : ' long');
     document.getElementById('bdDuration').textContent = formatDuration(durationMs);
-
-    document.getElementById('bdOrders').textContent = d.openOrders || 0;
+    document.getElementById('bdLeverage').textContent = (d.leverage != null ? d.leverage : 1) + 'X';
     document.getElementById('bdFilled').textContent = d.filledOrders || 0;
 
     document.getElementById('bdGridType').textContent = (d.gridCount != null ? d.gridCount : '—') + ' (Арифметическая)';
