@@ -142,6 +142,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .btn-cta.danger{background:var(--red);color:#fff;padding:20px;font-size:17px}
 .btn-cta.secondary{background:var(--card);color:var(--text);border:1px solid var(--border)}
 .btn-cta:disabled{opacity:.5;cursor:not-allowed}
+.stop-option{background:#1c1c1f;border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer}
+.stop-option:active{background:#232326}
+.stop-option-title{font-weight:700;font-size:14px;margin-bottom:4px}
+.stop-option-desc{font-size:12px;color:var(--muted);line-height:1.4}
+.stop-option.danger{border-color:rgba(255,77,106,.4)}
+.stop-option.danger .stop-option-title{color:var(--red)}
 
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 20px;font-size:13px;color:var(--text);opacity:0;transition:all .3s;z-index:999;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -637,6 +643,25 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   </div>
 </div>
 
+<!-- ── Остановка бота: 3 варианта, что делать с ордерами/позицией на бирже ── -->
+<div class="sheet-backdrop" id="stopSheetBackdrop" onclick="closeStopSheet()"></div>
+<div class="sheet" id="stopSheet">
+  <h4>Как остановить бота?</h4>
+  <div class="stop-option" onclick="confirmStop('keep')">
+    <div class="stop-option-title">Просто остановить</div>
+    <div class="stop-option-desc">Бот перестанет работать, но все открытые ордера и позиция останутся на бирже как есть</div>
+  </div>
+  <div class="stop-option" onclick="confirmStop('cancel')">
+    <div class="stop-option-title">Остановить и снять ордера</div>
+    <div class="stop-option-desc">Отменит на бирже все открытые ордера этого бота, позицию не трогает</div>
+  </div>
+  <div class="stop-option danger" onclick="confirmStop('cancel_and_close')">
+    <div class="stop-option-title">Остановить, снять ордера и закрыть позицию</div>
+    <div class="stop-option-desc">Полный выход: отменяет ордера и закрывает позицию этого бота по рынку</div>
+  </div>
+  <button class="btn-cta secondary" onclick="closeStopSheet()" style="margin-top:4px">Отмена</button>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://s3.tradingview.com/tv.js"></script>
@@ -948,10 +973,42 @@ async function startBotDetail() {
   toast('▶ Команда запуска отправлена');
   fetchBotDetail();
 }
-async function stopBotDetail() {
+/** Клик на "■ ОСТАНОВИТЬ БОТА" больше не останавливает сразу — сначала
+ *  спрашиваем, что делать с открытыми ордерами и позицией на бирже (см.
+ *  stopSheet). Фактическая остановка — в confirmStop(). */
+function stopBotDetail() {
   if (!currentBotDetailId) return;
-  await fetch(BOTS_API + '/' + currentBotDetailId + '/stop', { method: 'POST' });
-  toast('⏸ Команда остановки отправлена');
+  document.getElementById('stopSheetBackdrop').classList.add('show');
+  document.getElementById('stopSheet').classList.add('show');
+}
+function closeStopSheet() {
+  document.getElementById('stopSheetBackdrop').classList.remove('show');
+  document.getElementById('stopSheet').classList.remove('show');
+}
+async function confirmStop(mode) {
+  const id = currentBotDetailId;
+  closeStopSheet();
+  if (!id) return;
+  toast('Останавливаем…');
+  try {
+    const r = await fetch(BOTS_API + '/' + id + '/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    });
+    const result = await r.json();
+    if (!r.ok || result.error) {
+      toast('Ошибка остановки: ' + (result.error || 'неизвестная'));
+      return;
+    }
+    let msg = '⏸ Бот остановлен';
+    if (result.cancelledOrders) msg += `, снято ордеров: ${result.cancelledOrders}`;
+    if (result.closedPosition) msg += `, закрыта позиция: ${result.closedPosition.qty} ${result.closedPosition.side}`;
+    if (result.errors && result.errors.length) msg += ` (есть ошибки: ${result.errors.join('; ')})`;
+    toast(msg);
+  } catch (e) {
+    toast('Нет связи с сервером: ' + e.message);
+  }
   fetchBotDetail();
 }
 function openSheet() {
