@@ -75,7 +75,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 .wizard-title{font-size:20px;font-weight:600;margin-bottom:16px}
 .tv-wrap{background:var(--card);border-radius:16px;overflow:hidden;margin-bottom:16px;height:280px}
-.tv-wrap #tv_chart,.tv-wrap #tv_chart2,.tv-wrap #tv_chart3{height:100%}
+.tv-wrap #tv_chart,.tv-wrap #tv_chart2,.tv-wrap #tv_chart3,.tv-wrap #tv_chart4{height:100%}
 .eye-btn{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--muted);font-size:12px;cursor:pointer;margin-bottom:10px;display:inline-flex;align-items:center;gap:6px}
 .eye-btn:active{background:#1f1f22}
 
@@ -110,7 +110,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .range-box.disabled input,.range-box.disabled .stepper-btn{pointer-events:none}
 .level-viz-wrap{background:var(--card);border-radius:16px;padding:12px 14px;margin-bottom:16px}
 .level-viz-label{font-size:11px;color:var(--muted);margin-bottom:8px}
-#levelViz{width:100%;height:160px;display:block}
+#levelViz,#levelViz4{width:100%;height:160px;display:block}
 .level-viz-scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px}
 .pair-chip-row{display:flex;gap:10px;margin-bottom:16px}
 .pair-chip{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer}
@@ -547,6 +547,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
         <span class="stat-unit" id="orderSizeUnit">ETH</span>
       </div>
     </div>
+    <div id="orderSizeMinWarning" style="font-size:11px;color:var(--red);padding:4px 0 8px"></div>
     <div class="stat-row">
       <label>Прибыль на ордер</label>
       <div class="stat-val" id="profitPerOrderVal">—</div>
@@ -564,22 +565,49 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   </div>
 </div>
 
-<!-- ── Мастер создания: временная заглушка для оставшихся полей (проверка
-     комиссии, запуск) — реальный шаг 4 ещё не спроектирован, это не
-     претендует быть финальным дизайном, просто чтобы бот было чем реально
-     создать прямо сейчас. Размер ордера теперь вводится на шаге 3 (нужен
-     там для расчёта необходимого обеспечения), здесь только его результат. ── -->
+<!-- ── Мастер создания: шаг 4 из 4 — финальный обзор сделки. Только ОДНА
+     кнопка ("Создать сейчас") — никаких Назад/Далее внизу, весь остальной
+     экран целиком информационный: график с уровнями сетки и сводка всего,
+     что было настроено на шагах 1-3. ── -->
 <div class="page" id="page-finalize" style="display:none">
   <div class="back-row" onclick="backToInvestStep()">← Назад</div>
   <div class="wizard-title" id="finalizeTitle">Создание фьючерс бота</div>
 
+  <!-- На шаге 4 намеренно НЕТ кнопки-глазика скрытия графика (в отличие от
+       шагов 1-3) — единственная кнопка на этом экране должна быть "Создать
+       сейчас", график здесь чисто информационный и всегда виден. -->
+  <div class="tv-wrap" id="tvWrap4"><div id="tv_chart4"></div></div>
+
+  <div class="level-viz-wrap">
+    <div class="level-viz-label">Уровни сетки: <span id="levelVizCount4">—</span></div>
+    <svg id="levelViz4" viewBox="0 0 300 160" preserveAspectRatio="none"></svg>
+    <div class="level-viz-scale"><span id="levelVizUpper4">—</span><span id="levelVizLower4">—</span></div>
+  </div>
+
+  <div class="section-title">Сделка</div>
+  <div class="stat-list">
+    <div class="stat-row"><label>Пара</label><div class="stat-val" id="finalPair">—</div></div>
+    <div class="stat-row"><label>Направление</label><div class="stat-val" id="finalDirection">—</div></div>
+    <div class="stat-row"><label>Диапазон</label><div class="stat-val" id="finalRange">—</div></div>
+    <div class="stat-row"><label>Тип сетки</label><div class="stat-val" id="finalGridType">—</div></div>
+    <div class="stat-row"><label>Количество сеток</label><div class="stat-val" id="finalGridCount">—</div></div>
+    <div class="stat-row"><label>Шаг цены</label><div class="stat-val" id="finalStepPct">—</div></div>
+    <div class="stat-row"><label>Шаг сетки в USDT</label><div class="stat-val" id="finalStepAbs">—</div></div>
+  </div>
+
+  <div class="section-title">Инвестиции</div>
+  <div class="stat-list">
+    <div class="stat-row"><label>Размер ордера</label><div class="stat-val" id="finalOrderSize">—</div></div>
+    <div class="stat-row"><label>Сумма инвестиции</label><div class="stat-val" id="finalInvestAmount">—</div></div>
+    <div class="stat-row"><label>Необходимое обеспечение</label><div class="stat-val" id="finalRequired">—</div></div>
+    <div class="stat-row"><label>Прибыль на ордер</label><div class="stat-val" id="finalProfitPerOrder">—</div></div>
+    <div class="stat-row"><label>Комиссия</label><div class="stat-val" id="finalFeeRate">—</div></div>
+  </div>
+
   <div class="fee-check" id="feeCheck"></div>
 
-  <div class="wizard-nav">
-    <button onclick="backToInvestStep()">‹ Назад</button>
-    <span id="createStatus"></span>
-    <button class="next" id="nextBtn" onclick="confirmRangeStep()">Создать бота</button>
-  </div>
+  <span id="createStatus" style="display:block;text-align:center;margin-bottom:10px;font-size:12px;color:var(--muted)"></span>
+  <button class="next" id="nextBtn" style="width:100%" onclick="confirmRangeStep()">Создать сейчас</button>
 </div>
 
 <!-- ── "+" Открыть бота ── -->
@@ -940,6 +968,7 @@ let wizardGridCurvature = 2;
 let tvWidget = null;
 let tvWidget2 = null;
 let tvWidget3 = null;
+let tvWidget4 = null;
 let wizardInvestDenom = 'quote';
 let wizardLastPrice = null;
 // Пока пользователь не тронул поле руками, "Количество сеток" на шаге 2
@@ -992,6 +1021,12 @@ function filterPairs(q) {
 // видно в подписи предпросмотра, чтобы не выдавать оценку за факт.
 let wizardFeeRatePct = null;
 let wizardFeeRateSource = 'default';
+
+// Реальные биржевые минимумы размера ордера (не оценка) — Bybit просто
+// отклонит ордер меньше этого, независимо от того, покрывает ли % шага
+// сетки комиссию. Подгружаются на шаге 3 (см. setupInvestStep).
+let wizardMinOrderQty = null;
+let wizardMinNotional = null;
 
 async function loadWizardFeeRate(symbol) {
   wizardFeeRatePct = null;
@@ -1286,14 +1321,75 @@ function backToGridStep() {
   document.getElementById('page-grid').style.display = 'block';
 }
 
+/**
+ * Шаг 3 → шаг 4: последний рубеж перед показом кнопки "Создать сейчас".
+ * checkGridFee() уже не пускает дальше шага 2, если сетка убыточна по
+ * % шага — но на шаге 3 пользователь свободно двигает размер ордера/сумму
+ * инвестиции, поэтому прямо здесь пересчитываем итоговую прибыль на ордер
+ * ЕЩЁ РАЗ по факту текущего размера ордера и блокируем переход, если она не
+ * строго положительна (задача: человек с слишком маленьким размером ордера
+ * должен застрять на шаге 3, а не увидеть кнопку запуска).
+ */
 function goToFinalizeStep() {
+  if (!gridFeeOk) {
+    toast('Сначала исправьте диапазон/тип/число сеток — сетка убыточна после комиссии');
+    return;
+  }
+  const levels = computeLevelsForInvest();
+  const orderSizeEth = parseFloat(document.getElementById('orderSizeInput').value);
+  if (!levels || !orderSizeEth || orderSizeEth <= 0) {
+    toast('Укажите корректный размер ордера');
+    return;
+  }
+  const feeRatePct = wizardFeeRatePct != null ? wizardFeeRatePct : 0.055;
+  const netProfitPerOrder = netProfitPerOrderUsdt(levels, orderSizeEth, feeRatePct);
+  if (!(netProfitPerOrder > 0)) {
+    toast('Размер ордера слишком мал: прибыль на сделку не покрывает комиссию. Увеличьте размер ордера или сумму инвестиции.');
+    return;
+  }
+  checkOrderSizeMinimum();
+  if (!orderSizeMinOk) {
+    toast('Размер ордера меньше минимального, который принимает Bybit. Увеличьте размер ордера или сумму инвестиции.');
+    return;
+  }
+
   document.getElementById('page-invest').style.display = 'none';
   document.getElementById('page-finalize').style.display = 'block';
+  renderChart('tv_chart4', wizardSymbol, w => tvWidget4 = w);
+  renderFinalizeSummary(levels, orderSizeEth, feeRatePct, netProfitPerOrder);
   checkGridFee();
 }
 function backToInvestStep() {
   document.getElementById('page-finalize').style.display = 'none';
   document.getElementById('page-invest').style.display = 'block';
+}
+
+/** Сводка всего, что настроено на шагах 1-3, для финального экрана. */
+function renderFinalizeSummary(levels, orderSizeEth, feeRatePct, netProfitPerOrder) {
+  const meta = baseCoinMeta(wizardSymbol);
+  const lower = parseFloat(document.getElementById('lowerInput2').value);
+  const upper = parseFloat(document.getElementById('upperInput2').value);
+  const gridTypeLabels = { arithmetic: 'Арифметическая', geometric: 'Геометрическая', exponential: 'Экспоненциальная' };
+  const { minStep, minStepMid } = worstStepPair(levels);
+
+  document.getElementById('finalizeTitle').textContent =
+    'Создание фьючерс бота · ' + wizardSymbol.replace('USDT', '/USDT');
+  document.getElementById('finalPair').textContent = wizardSymbol.replace('USDT', '/USDT');
+  document.getElementById('finalDirection').textContent = wizardDirection === 'Short' ? 'Short ↘' : 'Long ↗';
+  document.getElementById('finalRange').textContent = '$' + lower + ' — $' + upper;
+  document.getElementById('finalGridType').textContent = gridTypeLabels[wizardGridType] || wizardGridType;
+  document.getElementById('finalGridCount').textContent = levels.length - 1;
+  document.getElementById('finalStepPct').textContent = ((minStep / minStepMid) * 100).toFixed(3) + '%';
+  document.getElementById('finalStepAbs').textContent = '$' + minStep.toFixed(2);
+  document.getElementById('finalOrderSize').textContent = orderSizeEth.toFixed(6) + ' ' + meta.code;
+  document.getElementById('finalInvestAmount').textContent =
+    document.getElementById('investAmountInput').value + ' ' + (wizardInvestDenom === 'base' ? meta.code : 'USDT');
+  document.getElementById('finalRequired').textContent = document.getElementById('requiredInvestVal').textContent;
+  document.getElementById('finalProfitPerOrder').textContent = '$' + netProfitPerOrder.toFixed(netProfitPerOrder < 1 ? 4 : 2);
+  document.getElementById('finalFeeRate').textContent =
+    feeRatePct.toFixed(3) + '% (' + (wizardFeeRateSource === 'bybit' ? 'реальная с Bybit' : 'оценка по умолчанию') + ')';
+
+  renderLevelViz(lower, upper, levels.length - 1, wizardGridType, wizardGridCurvature, '4');
 }
 
 function baseCoinMeta(symbol) {
@@ -1335,7 +1431,52 @@ function setupInvestStep() {
     .then(d => { balEl.textContent = d.available != null ? '$' + d.available.toFixed(2) : '—'; })
     .catch(() => { balEl.textContent = '—'; });
 
+  wizardMinOrderQty = null;
+  wizardMinNotional = null;
+  fetch(API_BASE + '/api/instrument-info?symbol=' + wizardSymbol)
+    .then(r => r.json())
+    .then(d => {
+      if (d.minOrderQty != null) wizardMinOrderQty = d.minOrderQty;
+      if (d.minNotionalValue != null) wizardMinNotional = d.minNotionalValue;
+      checkOrderSizeMinimum();
+    })
+    .catch(() => {});
+
   renderInvestStats();
+  checkOrderSizeMinimum();
+}
+
+/**
+ * Реальный минимум ордера с Bybit (см. /api/instrument-info) — независимая
+ * от %-прибыльности сетки проверка: даже "выгодный" по шагу ордер биржа
+ * просто отклонит, если он меньше минимального количества/суммы сделки.
+ * Показывает предупреждение прямо на шаге 3 и решает, можно ли идти на
+ * шаг 4 (см. goToFinalizeStep) — так пользователь со слишком маленьким
+ * размером ордера застревает именно здесь, а не доходит до кнопки запуска.
+ */
+let orderSizeMinOk = true;
+function checkOrderSizeMinimum() {
+  const warnEl = document.getElementById('orderSizeMinWarning');
+  const orderSizeEth = parseFloat(document.getElementById('orderSizeInput').value);
+  orderSizeMinOk = true;
+  if (!warnEl) return;
+  if (!orderSizeEth || wizardMinOrderQty == null) { warnEl.textContent = ''; return; }
+
+  const meta = baseCoinMeta(wizardSymbol);
+  if (orderSizeEth < wizardMinOrderQty) {
+    orderSizeMinOk = false;
+    warnEl.textContent = `✗ Минимум на Bybit — ${wizardMinOrderQty} ${meta.code}. Увеличьте размер ордера или сумму инвестиции.`;
+    return;
+  }
+  if (wizardMinNotional != null && wizardLastPrice) {
+    const notional = orderSizeEth * wizardLastPrice;
+    if (notional < wizardMinNotional) {
+      orderSizeMinOk = false;
+      warnEl.textContent = `✗ Сумма сделки $${notional.toFixed(2)} меньше минимальной на Bybit ($${wizardMinNotional}). Увеличьте размер ордера или сумму инвестиции.`;
+      return;
+    }
+  }
+  warnEl.textContent = '';
 }
 
 function computeLevelsForInvest() {
@@ -1368,6 +1509,26 @@ function orderSizeForRequiredUsdt(requiredUsdt, levels) {
   return sumLevels > 0 ? requiredUsdt / sumLevels : null;
 }
 
+/** Худшая (минимальная в $) пара соседних уровней сетки — та же логика, что
+ *  используется и в checkGridFee (там в %), нужна везде, где считаем
+ *  прибыль на ОДИН ордер по факту, а не оценкой по всей сетке разом. */
+function worstStepPair(levels) {
+  let minStep = Infinity, minStepMid = 0;
+  for (let i = 1; i < levels.length; i++) {
+    const step = levels[i] - levels[i - 1];
+    if (step < minStep) { minStep = step; minStepMid = (levels[i] + levels[i - 1]) / 2; }
+  }
+  return { minStep, minStepMid };
+}
+
+/** Чистая прибыль (после комиссии за обе ноги round-trip'а) на ОДИН ордер
+ *  худшего по % шага уровня, при заданном фактическом размере ордера. */
+function netProfitPerOrderUsdt(levels, orderSizeEth, feeRatePct) {
+  const { minStep, minStepMid } = worstStepPair(levels);
+  const feeRoundTripUsdt = 2 * (feeRatePct / 100) * minStepMid * orderSizeEth;
+  return minStep * orderSizeEth - feeRoundTripUsdt;
+}
+
 /**
  * "Размер ордера", "Прибыль на ордер" и "Необходимое обеспечение" на шаге 3 —
  * по образцу реальной формы Bybit (4 строки после суммы инвестиции), но
@@ -1391,6 +1552,7 @@ function renderInvestStats() {
   if (!levels) {
     profitEl.textContent = '—';
     reqEl.textContent = '—';
+    checkOrderSizeMinimum();
     return;
   }
 
@@ -1407,26 +1569,18 @@ function renderInvestStats() {
   if (!orderSizeEth || orderSizeEth <= 0) {
     profitEl.textContent = '—';
     reqEl.textContent = '—';
+    checkOrderSizeMinimum();
     return;
   }
 
   const feeRatePct = wizardFeeRatePct != null ? wizardFeeRatePct : 0.055;
-
-  // Худший (минимальный) шаг между соседними уровнями — та же логика, что
-  // и в checkGridFee, чтобы "прибыль на ордер" не выглядела оптимистичнее
-  // фактической проверки прибыльности сетки после комиссии.
-  let minStep = Infinity, minStepMid = 0;
-  for (let i = 1; i < levels.length; i++) {
-    const step = levels[i] - levels[i - 1];
-    if (step < minStep) { minStep = step; minStepMid = (levels[i] + levels[i - 1]) / 2; }
-  }
-  const feeRoundTripUsdt = 2 * (feeRatePct / 100) * minStepMid * orderSizeEth;
-  const netProfit = minStep * orderSizeEth - feeRoundTripUsdt;
+  const netProfit = netProfitPerOrderUsdt(levels, orderSizeEth, feeRatePct);
   profitEl.textContent = '$' + netProfit.toFixed(netProfit < 1 ? 4 : 2);
 
   const requiredUsdt = requiredUsdtForOrderSize(orderSizeEth, levels);
   if (requiredUsdt == null) {
     reqEl.textContent = (orderSizeEth * levels.length).toFixed(6) + ' ' + baseCoinMeta(wizardSymbol).code + ' (цена ещё грузится)';
+    checkOrderSizeMinimum();
     return;
   }
   reqEl.textContent = '$' + requiredUsdt.toFixed(2);
@@ -1437,6 +1591,7 @@ function renderInvestStats() {
       ? (requiredUsdt / wizardLastPrice).toFixed(6)
       : requiredUsdt.toFixed(2);
   }
+  checkOrderSizeMinimum();
 }
 
 document.getElementById('pairChipRow').addEventListener('click', e => {
@@ -1549,11 +1704,11 @@ function minMaxStepPct(lower, upper, gridCount, gridType, gridCurvature) {
  * верхней границей, ровно как расположены настоящие уровни для текущего
  * типа/количества/кривизны сетки.
  */
-function renderLevelViz(lower, upper, gridCount, gridType, gridCurvature) {
-  const svg = document.getElementById('levelViz');
-  const countEl = document.getElementById('levelVizCount');
-  const upperEl = document.getElementById('levelVizUpper');
-  const lowerEl = document.getElementById('levelVizLower');
+function renderLevelViz(lower, upper, gridCount, gridType, gridCurvature, suffix = '') {
+  const svg = document.getElementById('levelViz' + suffix);
+  const countEl = document.getElementById('levelVizCount' + suffix);
+  const upperEl = document.getElementById('levelVizUpper' + suffix);
+  const lowerEl = document.getElementById('levelVizLower' + suffix);
 
   if (!lower || !upper || !gridCount || upper <= lower) {
     svg.innerHTML = '';
@@ -1687,6 +1842,24 @@ async function confirmRangeStep() {
   const upperPrice = parseFloat(document.getElementById('upperInput2').value);
   const gridCount = parseInt(document.getElementById('gridCountInput').value, 10);
   const orderSizeEth = parseFloat(document.getElementById('orderSizeInput').value);
+
+  // Последний рубеж перед реальным запуском бота (та же проверка, что уже
+  // не пускает со шага 3 на шаг 4) — дублируем здесь намеренно, чтобы кнопка
+  // "Создать сейчас" не могла запустить убыточную сетку ни при каких
+  // обстоятельствах, даже если состояние визарда как-то разъехалось.
+  const levelsForCheck = computeLevelsForInvest();
+  const feeRatePctForCheck = wizardFeeRatePct != null ? wizardFeeRatePct : 0.055;
+  if (!levelsForCheck || !orderSizeEth || orderSizeEth <= 0
+      || !(netProfitPerOrderUsdt(levelsForCheck, orderSizeEth, feeRatePctForCheck) > 0)) {
+    toast('Размер ордера слишком мал: прибыль на сделку не покрывает комиссию');
+    return;
+  }
+  checkOrderSizeMinimum();
+  if (!orderSizeMinOk) {
+    toast('Размер ордера меньше минимального, который принимает Bybit');
+    return;
+  }
+
   const id = `${slugify(wizardSymbol)}-${slugify(wizardDirection)}-${Date.now().toString(36)}`;
 
   const nextBtn = document.getElementById('nextBtn');
