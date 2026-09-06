@@ -102,6 +102,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .stat-row .stat-val input{width:90px;background:none;border:none;color:var(--text);font-family:var(--mono);font-size:14px;font-weight:700;text-align:right}
 .stat-row .stat-val input:focus{outline:none}
 .stat-row .stat-unit{font-size:12px;color:var(--muted)}
+.stat-row.editable{background:rgba(124,92,255,.10);border-radius:10px;margin:0 -10px;padding:10px 10px;border-bottom:none}
+.stat-row.editable label{color:var(--accent2)}
+.stat-row.editable .stat-val input{border:1px solid var(--accent2);border-radius:8px;padding:4px 8px;background:rgba(124,92,255,.12);color:var(--accent2)}
+.stat-row.editable .stat-unit{color:var(--accent2);font-weight:700}
 .range-box.disabled{opacity:.45}
 .range-box.disabled input,.range-box.disabled .stepper-btn{pointer-events:none}
 .level-viz-wrap{background:var(--card);border-radius:16px;padding:12px 14px;margin-bottom:16px}
@@ -475,6 +479,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="rval" id="stepPriceVal">—</div>
   </div>
 
+  <div class="readonly-box">
+    <label>Шаг сетки в USDT</label>
+    <div class="rval" id="stepAbsVal">—</div>
+  </div>
+
   <div class="range-box" id="secondaryParamBox" style="margin-bottom:16px">
     <label id="secondaryParamLabel">Шаг в %</label>
     <div class="stepper-row">
@@ -531,10 +540,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
       <label>Доступно USDT (Единый торговый)</label>
       <div class="stat-val" id="availableBalanceVal">—</div>
     </div>
-    <div class="stat-row">
-      <label>Размер ордера</label>
+    <div class="stat-row editable">
+      <label>✎ Размер ордера <span style="font-weight:400;opacity:.7">(можно изменить)</span></label>
       <div class="stat-val input-val">
-        <input id="orderSizeInput" type="number" step="0.0001" placeholder="0.01" value="0.01" oninput="renderInvestStats()">
+        <input id="orderSizeInput" type="number" step="0.0001" placeholder="0.01" value="0.01" oninput="investDriverField='orderSize'; renderInvestStats()">
         <span class="stat-unit" id="orderSizeUnit">ETH</span>
       </div>
     </div>
@@ -933,6 +942,14 @@ let tvWidget2 = null;
 let tvWidget3 = null;
 let wizardInvestDenom = 'quote';
 let wizardLastPrice = null;
+// Пока пользователь не тронул поле руками, "Количество сеток" на шаге 2
+// пересчитывается под целевой шаг DEFAULT_TARGET_STEP_PCT при любом
+// изменении диапазона/типа сетки, ведущем к этому шагу.
+let gridCountTouched = false;
+// На шаге 3 "Сумма инвестиции" и "Размер ордера" связаны в обе стороны —
+// investDriverField запоминает, какое поле пользователь трогал последним
+// (оно считается "источником истины"), а второе пересчитывается из него.
+let investDriverField = 'orderSize';
 
 function hideAllPages() {
   ['page-list', 'page-futures-list', 'page-spot-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range', 'page-grid', 'page-invest', 'page-finalize']
@@ -994,6 +1011,8 @@ function selectPair(symbol) {
   wizardSymbol = symbol;
   wizardGridType = 'arithmetic';
   wizardGridCurvature = 2;
+  gridCountTouched = false;
+  investDriverField = 'orderSize';
   document.getElementById('page-pair').style.display = 'none';
   document.getElementById('page-range').style.display = 'block';
   const title = 'Создание фьючерс бота · ' + symbol.replace('USDT', '/USDT');
@@ -1013,6 +1032,22 @@ function selectPair(symbol) {
   document.getElementById('eyeBtn1').textContent = '👁 Скрыть график';
   renderChart('tv_chart', symbol, w => tvWidget = w);
   loadWizardFeeRate(symbol);
+  loadDefaultRange(symbol);
+}
+
+/** Дефолт диапазона на шаге 1 — ±5% от текущей рыночной цены, пока
+ *  пользователь не начал вводить границы вручную. */
+async function loadDefaultRange(symbol) {
+  try {
+    const r = await fetch(API_BASE + '/api/price?symbol=' + symbol);
+    const d = await r.json();
+    if (d.price == null) return;
+    wizardLastPrice = d.price;
+    const lowerEl = document.getElementById('lowerInput');
+    const upperEl = document.getElementById('upperInput');
+    if (!lowerEl.value) lowerEl.value = (d.price * 0.95).toFixed(2);
+    if (!upperEl.value) upperEl.value = (d.price * 1.05).toFixed(2);
+  } catch (e) { /* пользователь введёт диапазон вручную */ }
 }
 
 function toggleChart(wrapId, btnId) {
@@ -1070,12 +1105,39 @@ document.getElementById('gridTypeRow').addEventListener('click', e => {
   document.querySelectorAll('#gridTypeRow .toggle-pill').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   wizardGridType = btn.dataset.gtype;
+  // Смена типа сетки на новый диапазон значений % шага — пока пользователь
+  // не задавал количество сеток вручную, держим целевые ~0.2% и для нового типа.
+  if (!gridCountTouched) {
+    const lower = parseFloat(document.getElementById('lowerInput2').value);
+    const upper = parseFloat(document.getElementById('upperInput2').value);
+    const n = computeDefaultGridCount(lower, upper, wizardGridType);
+    if (n) document.getElementById('gridCountInput').value = n;
+  }
   updateSecondaryParamUI();
   computeStepDisplay();
   checkGridFee();
 });
 
+/** Дефолт количества сеток на шаге 2 — такое n, чтобы шаг между уровнями
+ *  был ≈ DEFAULT_TARGET_STEP_PCT. Для geometric формула точная (шаг
+ *  постоянен в %), для arithmetic/exponential — приближение по шагу к
+ *  середине диапазона (сам шаг у них не строго постоянен в %). */
+const DEFAULT_TARGET_STEP_PCT = 0.2;
+function computeDefaultGridCount(lower, upper, gridType) {
+  if (!lower || !upper || upper <= lower) return null;
+  const targetFrac = DEFAULT_TARGET_STEP_PCT / 100;
+  let n;
+  if (gridType === 'geometric') {
+    n = Math.log(upper / lower) / Math.log(1 + targetFrac);
+  } else {
+    const mid = (upper + lower) / 2;
+    n = (upper - lower) / (targetFrac * mid);
+  }
+  return Math.max(2, Math.min(200, Math.round(n)));
+}
+
 function adjustGridCount(delta) {
+  gridCountTouched = true;
   const el = document.getElementById('gridCountInput');
   const v = Math.max(2, Math.min(200, (parseInt(el.value, 10) || 33) + delta));
   el.value = v;
@@ -1187,6 +1249,10 @@ function goToGridStep() {
   }
   document.getElementById('lowerInput2').value = lower;
   document.getElementById('upperInput2').value = upper;
+  if (!gridCountTouched) {
+    const n = computeDefaultGridCount(lower, upper, wizardGridType);
+    if (n) document.getElementById('gridCountInput').value = n;
+  }
   document.getElementById('page-range').style.display = 'none';
   document.getElementById('page-grid').style.display = 'block';
   document.getElementById('tvWrap2').style.display = 'block';
@@ -1238,7 +1304,9 @@ function baseCoinMeta(symbol) {
 
 /** Заходим на шаг 3 — настраиваем чипы под выбранный на шаге 1 символ,
  *  сбрасываем к денoминации USDT по умолчанию и тянем реальные цену и
- *  доступный баланс с биржи (не оценки/заглушки). */
+ *  доступный баланс с биржи (не оценки/заглушки). Сумма инвестиции по
+ *  умолчанию НЕ хардкод $100 — renderInvestStats() ниже сам подставит туда
+ *  необходимое обеспечение, рассчитанное из дефолтного размера ордера. */
 function setupInvestStep() {
   const meta = baseCoinMeta(wizardSymbol);
   document.getElementById('investTitle').textContent =
@@ -1253,9 +1321,6 @@ function setupInvestStep() {
   document.getElementById('pairChipQuote').classList.add('active');
   document.getElementById('investIcon').textContent = '₮';
   document.getElementById('investIcon').style.background = '#26a17b';
-  if (!document.getElementById('investAmountInput').value) {
-    document.getElementById('investAmountInput').value = 100;
-  }
 
   wizardLastPrice = null;
   fetch(API_BASE + '/api/price?symbol=' + wizardSymbol)
@@ -1273,6 +1338,36 @@ function setupInvestStep() {
   renderInvestStats();
 }
 
+function computeLevelsForInvest() {
+  const lower = parseFloat(document.getElementById('lowerInput2').value);
+  const upper = parseFloat(document.getElementById('upperInput2').value);
+  const gridCount = parseInt(document.getElementById('gridCountInput').value, 10);
+  if (!lower || !upper || !gridCount || upper <= lower) return null;
+  return calcGridLevelsClient(lower, upper, gridCount, wizardGridType, wizardGridCurvature);
+}
+
+/** Необходимое обеспечение для заданного размера ордера — см. комментарий
+ *  у renderInvestStats() ниже про одностороннюю сетку. null для Short,
+ *  пока не подгрузилась реальная цена (нужна для перевода ETH/BTC в $). */
+function requiredUsdtForOrderSize(orderSizeEth, levels) {
+  if (wizardDirection === 'Short') {
+    return wizardLastPrice != null ? orderSizeEth * levels.length * wizardLastPrice : null;
+  }
+  return levels.reduce((sum, lvl) => sum + lvl * orderSizeEth, 0);
+}
+
+/** Обратная формула — размер ордера, нужный, чтобы обеспечение равнялось
+ *  заданной сумме в USDT (используется, когда пользователь редактирует
+ *  саму сумму инвестиции, а не размер ордера). */
+function orderSizeForRequiredUsdt(requiredUsdt, levels) {
+  if (wizardDirection === 'Short') {
+    if (!wizardLastPrice) return null;
+    return requiredUsdt / (levels.length * wizardLastPrice);
+  }
+  const sumLevels = levels.reduce((s, l) => s + l, 0);
+  return sumLevels > 0 ? requiredUsdt / sumLevels : null;
+}
+
 /**
  * "Размер ордера", "Прибыль на ордер" и "Необходимое обеспечение" на шаге 3 —
  * по образцу реальной формы Bybit (4 строки после суммы инвестиции), но
@@ -1281,22 +1376,40 @@ function setupInvestStep() {
  * resolveOneSidedOrder), поэтому "обеспечение" — это капитал, необходимый,
  * чтобы удержать открывающие ордера на ВСЕХ уровнях одновременно, а не
  * futures-маржа с плечом, как у Bybit.
+ *
+ * "Сумма инвестиции" и "Размер ордера" — два взаимно связанных поля:
+ * investDriverField запоминает, какое из них последним трогал пользователь,
+ * и именно оно считается источником истины, а второе всегда пересчитывается
+ * из него, чтобы оба значения оставались согласованы друг с другом.
  */
 function renderInvestStats() {
   const profitEl = document.getElementById('profitPerOrderVal');
   const reqEl = document.getElementById('requiredInvestVal');
-  const lower = parseFloat(document.getElementById('lowerInput2').value);
-  const upper = parseFloat(document.getElementById('upperInput2').value);
-  const gridCount = parseInt(document.getElementById('gridCountInput').value, 10);
-  const orderSizeEth = parseFloat(document.getElementById('orderSizeInput').value);
+  const orderSizeInput = document.getElementById('orderSizeInput');
+  const levels = computeLevelsForInvest();
 
-  if (!lower || !upper || !gridCount || upper <= lower || !orderSizeEth || orderSizeEth <= 0) {
+  if (!levels) {
     profitEl.textContent = '—';
     reqEl.textContent = '—';
     return;
   }
 
-  const levels = calcGridLevelsClient(lower, upper, gridCount, wizardGridType, wizardGridCurvature);
+  let orderSizeEth = parseFloat(orderSizeInput.value);
+
+  if (investDriverField === 'amount') {
+    const derivedSize = orderSizeForRequiredUsdt(getInvestmentUsdt(), levels);
+    if (derivedSize != null && derivedSize > 0) {
+      orderSizeEth = derivedSize;
+      orderSizeInput.value = derivedSize.toFixed(6);
+    }
+  }
+
+  if (!orderSizeEth || orderSizeEth <= 0) {
+    profitEl.textContent = '—';
+    reqEl.textContent = '—';
+    return;
+  }
+
   const feeRatePct = wizardFeeRatePct != null ? wizardFeeRatePct : 0.055;
 
   // Худший (минимальный) шаг между соседними уровнями — та же логика, что
@@ -1311,17 +1424,18 @@ function renderInvestStats() {
   const netProfit = minStep * orderSizeEth - feeRoundTripUsdt;
   profitEl.textContent = '$' + netProfit.toFixed(netProfit < 1 ? 4 : 2);
 
-  if (wizardDirection === 'Short') {
-    // Short: открывающая сторона — Sell, обеспечение нужно в базовой валюте
-    // (её нужно физически держать на каждом уровне сетки).
-    const totalBase = orderSizeEth * levels.length;
-    reqEl.textContent = wizardLastPrice
-      ? '$' + (totalBase * wizardLastPrice).toFixed(2)
-      : totalBase.toFixed(6) + ' ' + baseCoinMeta(wizardSymbol).code;
-  } else {
-    // Long: открывающая сторона — Buy по номинальной цене каждого уровня.
-    const requiredUsdt = levels.reduce((sum, lvl) => sum + lvl * orderSizeEth, 0);
-    reqEl.textContent = '$' + requiredUsdt.toFixed(2);
+  const requiredUsdt = requiredUsdtForOrderSize(orderSizeEth, levels);
+  if (requiredUsdt == null) {
+    reqEl.textContent = (orderSizeEth * levels.length).toFixed(6) + ' ' + baseCoinMeta(wizardSymbol).code + ' (цена ещё грузится)';
+    return;
+  }
+  reqEl.textContent = '$' + requiredUsdt.toFixed(2);
+
+  if (investDriverField === 'orderSize') {
+    const amountInput = document.getElementById('investAmountInput');
+    amountInput.value = wizardInvestDenom === 'base' && wizardLastPrice
+      ? (requiredUsdt / wizardLastPrice).toFixed(6)
+      : requiredUsdt.toFixed(2);
   }
 }
 
@@ -1355,6 +1469,12 @@ document.getElementById('pairChipRow').addEventListener('click', e => {
     icon.textContent = '₮';
     icon.style.background = '#26a17b';
   }
+  renderInvestStats();
+});
+
+document.getElementById('investAmountInput').addEventListener('input', () => {
+  investDriverField = 'amount';
+  renderInvestStats();
 });
 
 function adjustInvestAmount(dir) {
@@ -1364,6 +1484,8 @@ function adjustInvestAmount(dir) {
   const cur = parseFloat(input.value) || 0;
   const next = Math.max(0, cur + dir * step);
   input.value = wizardInvestDenom === 'base' ? next.toFixed(6) : next.toFixed(2);
+  investDriverField = 'amount';
+  renderInvestStats();
 }
 
 /** Сумма инвестиции в USDT независимо от того, в какой валюте пользователь
@@ -1459,13 +1581,31 @@ function renderLevelViz(lower, upper, gridCount, gridType, gridCurvature) {
   lowerEl.textContent = '$' + lower;
 }
 
+function minMaxStepAbs(lower, upper, gridCount, gridType, gridCurvature) {
+  const levels = calcGridLevelsClient(lower, upper, gridCount, gridType, gridCurvature);
+  let min = Infinity, max = -Infinity;
+  for (let i = 1; i < levels.length; i++) {
+    const step = levels[i] - levels[i - 1];
+    if (step < min) min = step;
+    if (step > max) max = step;
+  }
+  return { min, max };
+}
+
 function computeStepDisplay() {
   const lower = parseFloat(document.getElementById('lowerInput2').value);
   const upper = parseFloat(document.getElementById('upperInput2').value);
   const gridCount = parseInt(document.getElementById('gridCountInput').value, 10);
   const el = document.getElementById('stepPriceVal');
+  const absEl = document.getElementById('stepAbsVal');
   renderLevelViz(lower, upper, gridCount, wizardGridType, wizardGridCurvature);
-  if (!lower || !upper || !gridCount || upper <= lower) { el.textContent = '—'; return; }
+  if (!lower || !upper || !gridCount || upper <= lower) { el.textContent = '—'; absEl.textContent = '—'; return; }
+
+  const { min: minAbs, max: maxAbs } = minMaxStepAbs(lower, upper, gridCount, wizardGridType, wizardGridCurvature);
+  absEl.textContent = Math.abs(maxAbs - minAbs) < 0.005
+    ? '$' + minAbs.toFixed(2)
+    : '$' + minAbs.toFixed(2) + ' — $' + maxAbs.toFixed(2);
+
   // Для geometric показываем ТОТ ЖЕ % (ratio-1), что и поле "Шаг в %" —
   // иначе два числа "процентного шага" на одном экране отличались бы на
   // тысячные из-за разных математических соглашений (по середине пары
@@ -1524,8 +1664,13 @@ function checkGridFee() {
   if (nextBtn) nextBtn.classList.toggle('blocked', !gridFeeOk);
 }
 
-['lowerInput2', 'upperInput2', 'gridCountInput'].forEach(id => {
+['lowerInput2', 'upperInput2'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => { computeStepDisplay(); checkGridFee(); });
+});
+document.getElementById('gridCountInput').addEventListener('input', () => {
+  gridCountTouched = true;
+  computeStepDisplay();
+  checkGridFee();
 });
 
 function slugify(s) {
