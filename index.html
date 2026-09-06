@@ -137,6 +137,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .fee-check{border-radius:14px;padding:12px 14px;margin-bottom:16px;font-size:12px;line-height:1.6}
 .fee-check.ok{background:rgba(0,229,160,.1);border:1px solid rgba(0,229,160,.3);color:var(--accent)}
 .fee-check.bad{background:rgba(255,77,106,.1);border:1px solid rgba(255,77,106,.3);color:var(--red)}
+.fee-check.info{background:rgba(124,92,255,.1);border:1px solid rgba(124,92,255,.3);color:var(--accent2)}
+.btn-cta{width:100%;padding:16px;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);margin-bottom:10px;border:none}
+.btn-cta.danger{background:var(--red);color:#fff;padding:20px;font-size:17px}
+.btn-cta.secondary{background:var(--card);color:var(--text);border:1px solid var(--border)}
+.btn-cta:disabled{opacity:.5;cursor:not-allowed}
 
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 20px;font-size:13px;color:var(--text);opacity:0;transition:all .3s;z-index:999;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -604,10 +609,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="stat-row"><label>Комиссия</label><div class="stat-val" id="finalFeeRate">—</div></div>
   </div>
 
+  <div class="fee-check info" id="immediateOrdersInfo"></div>
+
   <div class="fee-check" id="feeCheck"></div>
 
   <span id="createStatus" style="display:block;text-align:center;margin-bottom:10px;font-size:12px;color:var(--muted)"></span>
-  <button class="next" id="nextBtn" style="width:100%" onclick="confirmRangeStep()">Создать сейчас</button>
+  <button class="btn-cta secondary" onclick="backToInvestStep()">‹ Назад — отредактировать</button>
+  <button class="btn-cta danger" id="nextBtn" onclick="confirmRangeStep()">Создать сейчас</button>
 </div>
 
 <!-- ── "+" Открыть бота ── -->
@@ -1390,6 +1398,43 @@ function renderFinalizeSummary(levels, orderSizeEth, feeRatePct, netProfitPerOrd
     feeRatePct.toFixed(3) + '% (' + (wizardFeeRateSource === 'bybit' ? 'реальная с Bybit' : 'оценка по умолчанию') + ')';
 
   renderLevelViz(lower, upper, levels.length - 1, wizardGridType, wizardGridCurvature, '4');
+
+  const infoEl = document.getElementById('immediateOrdersInfo');
+  const immediate = computeImmediateOrders(levels);
+  if (!immediate) {
+    infoEl.textContent = 'Не удалось загрузить текущую цену — количество ордеров под немедленное размещение неизвестно.';
+  } else if (immediate.count === 0) {
+    infoEl.textContent = 'Весь диапазон по другую сторону от текущей цены — ни один ордер не попадает под немедленное размещение у рынка, все уровни встанут по своим номинальным ценам.';
+  } else {
+    const sideLabel = immediate.side === 'Sell' ? 'продажу' : 'покупку';
+    infoEl.textContent = `По цене ~$${immediate.catchupPrice.toFixed(2)} будут сразу размещены ${immediate.count} лимитных ордеров на ${sideLabel} ${meta.code} — это уровни, которые уже "по другую сторону" от текущей цены рынка. Ставим лимитку в 0.1% от рынка (а не по рынку), чтобы исполниться мейкером и не платить повышенную тейкерскую комиссию.`;
+  }
+}
+
+/**
+ * Сколько уровней сетки при старте бота окажутся на "неправильной" стороне
+ * от текущей цены и вместо своей номинальной цены получат лимитку у самого
+ * рынка (±0.1%, catchupOffsetPct в gridLogic.js resolveOneSidedOrder) —
+ * чтобы не заходить тейкером по всей глубине сразу. Именно эта логика
+ * реально исполняется в bot.js buildInitialGrid(), здесь её точная копия
+ * для честного предпросмотра на шаге 4.
+ */
+const CATCHUP_OFFSET_PCT = 0.001;
+function computeImmediateOrders(levels) {
+  if (wizardLastPrice == null) return null;
+  const isShort = wizardDirection === 'Short';
+  const currentPrice = wizardLastPrice;
+  let count = 0;
+  for (const level of levels) {
+    if (Math.abs(level - currentPrice) / currentPrice < CATCHUP_OFFSET_PCT) continue; // не ставится вообще
+    const wouldCrossBook = isShort ? level <= currentPrice : level >= currentPrice;
+    if (wouldCrossBook) count++;
+  }
+  return {
+    count,
+    side: isShort ? 'Sell' : 'Buy',
+    catchupPrice: currentPrice * (isShort ? 1 + CATCHUP_OFFSET_PCT : 1 - CATCHUP_OFFSET_PCT),
+  };
 }
 
 function baseCoinMeta(symbol) {
