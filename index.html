@@ -177,7 +177,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .ov-val.neg{color:var(--red)}
 .ov-lbl{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
 .ov-icon{font-size:12px;line-height:1}
-.ov-art{position:absolute;right:8px;bottom:44px;font-size:36px;opacity:.45;pointer-events:none}
+.ov-art{position:absolute;right:8px;bottom:44px;width:56px;height:56px;object-fit:contain;border-radius:10px;opacity:.85;pointer-events:none}
 .ov-arrow{position:absolute;right:14px;bottom:14px;width:30px;height:30px;border-radius:50%;background:var(--accent2);color:#fff;border:none;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2}
 .section-title{font-size:13px;color:var(--muted);font-weight:600;margin:18px 2px 10px}
 </style>
@@ -384,7 +384,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
           <div class="scard"><div class="sval" id="bdFees">—</div><div class="slbl">Общая комиссия</div></div>
           <div class="scard"><div class="sval" id="bdGridProfit">—</div><div class="slbl">Прибыль сетки</div></div>
         </div>
-        <div class="scard"><div class="sval" id="bdFilled">—</div><div class="slbl">Сеток исполнено</div></div>
+        <div class="scard"><div class="sval" id="bdFilled">—</div><div class="slbl">Сеток закрыто</div></div>
       </div>
     </div>
     <div class="sgrid sgrid3">
@@ -798,17 +798,39 @@ function copyId(id) {
  * только в бейдже статуса и наличии "Закрытие: ..." во второй строке дат
  * (см. b.running/b.stoppedAt) — то же решение, что было и раньше.
  */
+/** Округление цены для карточки — 2 знака после запятой, но БЕЗ навязанных
+ *  хвостовых нулей (как в образце: "1986.9" и "2196.12" рядом, разная
+ *  длина — это округлённые, а не принудительно дополненные числа). */
+function roundPrice(x) {
+  if (x == null) return '—';
+  return (Math.round(x * 100) / 100).toString();
+}
+
 function renderBotCard(b) {
   // netProfit = валовая прибыль по спреду минус реально списанные Bybit
-  // комиссии (см. getExecutionDetails в bot.js) — честная итоговая цифра,
-  // а не оценка "до комиссии".
+  // комиссии (см. getExecutionDetails в bot.js) — "Прибыль по сеткам":
+  // честный net-результат ТОЛЬКО от завершённых циклов сетки, без учёта
+  // движения базового актива.
   const netProfit = b.netProfit != null ? b.netProfit : ((b.profit || 0) - (b.fees || 0));
-  const grossProfit = b.profit || 0;
+  // "Общая прибыль" = netProfit + нереализованный P&L ещё открытой позиции
+  // (сервер уже считает это в totalProfit — см. computeOpenPosition в
+  // server.js) — единственная цифра, которая честно отвечает на вопрос
+  // "если закрыть бота прямо сейчас по рынку, будет прибыль или убыток".
+  const totalProfit = b.totalProfit != null ? b.totalProfit : netProfit;
   const meta = baseCoinMeta(b.symbol || 'ETHUSDT');
   const badgeClass = 'ov-badge' + (b.running ? ' running' : '');
   const badgeText = b.running ? 'Активен' : 'Остановлен';
   const closeLine = b.stoppedAt ? `<p>Закрытие: ${formatDate(b.stoppedAt)}</p>` : '';
   const dirIcon = b.direction === 'Short' ? '🔻' : '🔺';
+
+  // Текущая позиция — средняя цена НАБОРА открытой (ещё не закрытой)
+  // экспозиции (см. computeOpenPosition в server.js), а не рыночная цена.
+  // Цвет показывает то же самое, что и unrealizedPnl: закрой прямо сейчас
+  // по рынку — в плюсе или в минусе.
+  const hasOpenPosition = b.avgEntryPrice != null;
+  const positionClass = hasOpenPosition && b.unrealizedPnl < 0 ? ' neg' : '';
+  const positionVal = hasOpenPosition ? roundPrice(b.avgEntryPrice) : '—';
+
   return `
     <div class="ov-card" onclick="openBotDetail('${b.id}')">
       <div class="ov-top">
@@ -825,15 +847,15 @@ function renderBotCard(b) {
       </div>
       <div class="ov-grid">
         <div>
-          <div class="ov-val">${b.lowerPrice} ⇄ ${b.upperPrice}</div>
+          <div class="ov-val">${roundPrice(b.lowerPrice)} ⇄ ${roundPrice(b.upperPrice)}</div>
           <div class="ov-lbl"><span class="ov-icon">${dirIcon}</span>${b.direction || '—'}</div>
         </div>
         <div>
-          <div class="ov-val">${b.currentPrice != null ? b.currentPrice : '—'}</div>
-          <div class="ov-lbl"><span class="ov-icon">💲</span>Текущая цена</div>
+          <div class="ov-val${positionClass}">${positionVal}</div>
+          <div class="ov-lbl"><span class="ov-icon">📍</span>Текущая позиция</div>
         </div>
         <div>
-          <div class="ov-val">${b.leverage != null ? b.leverage : 1}x</div>
+          <div class="ov-val">$${(b.closedVolume || 0).toFixed(2)}</div>
           <div class="ov-lbl"><span class="ov-icon">📊</span>Объём</div>
         </div>
         <div>
@@ -841,15 +863,19 @@ function renderBotCard(b) {
           <div class="ov-lbl"><span class="ov-icon">🛡</span>Маржа</div>
         </div>
         <div>
-          <div class="ov-val">$${grossProfit.toFixed(2)}</div>
-          <div class="ov-lbl"><span class="ov-icon">💰</span>Прибыль по ордерам</div>
+          <div class="ov-val${netProfit < 0 ? ' neg' : ''}">${(netProfit >= 0 ? '+' : '') + '$' + netProfit.toFixed(2)}</div>
+          <div class="ov-lbl"><span class="ov-icon">💰</span>Прибыль по сеткам</div>
         </div>
         <div>
-          <div class="ov-val${netProfit < 0 ? ' neg' : ''}">${(netProfit >= 0 ? '+' : '') + '$' + netProfit.toFixed(2)}</div>
+          <div class="ov-val${totalProfit < 0 ? ' neg' : ''}">${(totalProfit >= 0 ? '+' : '') + '$' + totalProfit.toFixed(2)}</div>
           <div class="ov-lbl"><span class="ov-icon">💎</span>Общая прибыль</div>
         </div>
+        <div style="grid-column:1/-1">
+          <div class="ov-val">${b.closedCycles || 0}</div>
+          <div class="ov-lbl"><span class="ov-icon">✅</span>Сеток закрыто</div>
+        </div>
       </div>
-      <div class="ov-art">🤖</div>
+      <img class="ov-art" src="bot-icon.jpg" alt="">
       <button type="button" class="ov-arrow" onclick="event.stopPropagation(); openBotDetail('${b.id}')">›</button>
     </div>`;
 }
@@ -965,8 +991,12 @@ async function fetchBotDetail() {
     document.getElementById('bdRealizedPnl2').className = netClass;
     document.getElementById('bdGridProfit').textContent = fmtUsd(profit);
     document.getElementById('bdGridProfit').className = 'sval' + (profit < 0 ? ' neg' : '');
-    document.getElementById('bdTotalPnl').textContent = fmtUsd(netProfit);
-    document.getElementById('bdTotalPnl').className = netClass;
+    // Общий PnL = реализованная net-прибыль циклов сетки + нереализованный
+    // P&L ещё открытой части позиции по текущей цене (d.totalProfit с
+    // сервера уже включает оба компонента — см. computeOpenPosition).
+    const totalProfit = d.totalProfit != null ? d.totalProfit : netProfit;
+    document.getElementById('bdTotalPnl').textContent = fmtUsd(totalProfit);
+    document.getElementById('bdTotalPnl').className = 'sval' + (totalProfit < 0 ? ' neg' : '');
 
     const roiStr = roi != null ? (roi >= 0 ? '+' : '') + roi.toFixed(2) + '%' : '—';
     const aprStr = apr != null ? (apr >= 0 ? '+' : '') + apr.toFixed(1) + '%' : '—';
@@ -980,14 +1010,21 @@ async function fetchBotDetail() {
     document.getElementById('bdFees').textContent = '$' + fees.toFixed(2);
 
     document.getElementById('bdSymbol').textContent = d.symbol || '—';
-    document.getElementById('bdVolume').textContent = investment > 0 ? '$' + investment : '—';
+    // Объём — сумма ЗАКРЫТЫХ сделок (closedVolume в bot.js), не сумма
+    // инвестиции/обеспечения (реальная жалоба: это были две одинаковые
+    // цифры, хотя "объём" должен расти по мере реальных закрытых циклов).
+    const closedVolume = d.closedVolume || 0;
+    document.getElementById('bdVolume').textContent = closedVolume > 0 ? '$' + closedVolume.toFixed(2) : '—';
     document.getElementById('bdCollateral').textContent = investment > 0 ? '$' + investment : '—';
     const dirEl = document.getElementById('bdDirection');
     dirEl.textContent = d.direction || '—';
     dirEl.className = 'sval ac-dir' + (d.direction === 'Short' ? ' short' : ' long');
     document.getElementById('bdDuration').textContent = formatDuration(durationMs);
     document.getElementById('bdLeverage').textContent = (d.leverage != null ? d.leverage : 1) + 'X';
-    document.getElementById('bdFilled').textContent = d.filledOrders || 0;
+    // closedCycles — ПОЛНОСТЬЮ завершённые циклы сетки (открытие+закрытие),
+    // а не просто исполнившиеся ордера (raw d.filledOrders считал уровень
+    // "сработавшим" уже после одного лишь открытия — реальная жалоба).
+    document.getElementById('bdFilled').textContent = d.closedCycles || 0;
 
     const gridTypeLabel = GRID_TYPE_LABELS[d.gridType] || GRID_TYPE_LABELS.arithmetic;
     document.getElementById('bdGridType').textContent = (d.gridCount != null ? d.gridCount : '—') + ' (' + gridTypeLabel + ')';
