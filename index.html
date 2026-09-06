@@ -49,6 +49,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .sgrid3{grid-template-columns:1fr 1fr 1fr}
 .accent-card{background:rgba(124,92,255,.12);border:1px solid rgba(124,92,255,.3);border-radius:12px;padding:14px;display:flex;flex-direction:column;justify-content:center}
+.bd-accent-icon{width:30px;height:30px;border-radius:50%;background:rgba(124,92,255,.3);display:flex;align-items:center;justify-content:center;font-size:14px;margin-bottom:10px}
+.bd-pair{display:flex;align-items:center;gap:8px;font-size:15px}
 .bd-split{display:flex;gap:10px;margin-bottom:10px;align-items:stretch}
 .bd-split>.accent-card{flex:1}
 .bd-split-right{flex:1;display:flex;flex-direction:column;gap:10px}
@@ -355,12 +357,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
     <div class="section-title">Основная информация</div>
     <div class="sgrid sgrid3">
-      <div class="scard"><div class="sval" id="bdSymbol">—</div><div class="slbl">Пара</div></div>
-      <div class="scard"><div class="sval" id="bdVolume">—</div><div class="slbl">Объём</div></div>
-      <div class="scard"><div class="sval" id="bdCollateral">—</div><div class="slbl">Обеспечение</div></div>
+      <div class="scard"><div class="sval bd-pair" id="bdSymbol"><span class="ov-coin" id="bdPairCoin" style="width:22px;height:22px;font-size:11px">—</span><span id="bdPairText">—</span></div><div class="slbl">Пара</div></div>
+      <div class="scard"><div class="sval" id="bdVolume">—</div><div class="slbl"><span class="ov-icon">💎</span>Объём</div></div>
+      <div class="scard"><div class="sval" id="bdCollateral">—</div><div class="slbl"><span class="ov-icon">💎</span>Маржа</div></div>
     </div>
     <div class="bd-split">
       <div class="accent-card">
+        <div class="bd-accent-icon">💎</div>
         <div class="sval" id="bdRealizedPnl1" style="font-size:22px">—</div>
         <div class="slbl">Общая прибыль</div>
       </div>
@@ -376,15 +379,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="section-title">Эффективность</div>
     <div class="bd-split">
       <div class="accent-card">
+        <div class="bd-accent-icon">💎</div>
         <div class="sval" id="bdRealizedPnl2" style="font-size:22px">—</div>
         <div class="slbl">Реализованный PnL</div>
       </div>
       <div class="bd-split-right">
         <div class="sgrid">
-          <div class="scard"><div class="sval" id="bdFees">—</div><div class="slbl">Общая комиссия</div></div>
-          <div class="scard"><div class="sval" id="bdGridProfit">—</div><div class="slbl">Прибыль сетки</div></div>
+          <div class="scard"><div class="sval" id="bdFees">—</div><div class="slbl"><span class="ov-icon">💎</span>Общая комиссия</div></div>
+          <div class="scard"><div class="sval" id="bdGridProfit">—</div><div class="slbl"><span class="ov-icon">💎</span>Прибыль сетки</div></div>
         </div>
-        <div class="scard"><div class="sval" id="bdFilled">—</div><div class="slbl">Сеток закрыто</div></div>
+        <div class="scard"><div class="sval" id="bdFilled">—</div><div class="slbl"><span class="ov-icon">💎</span>Сеток закрыто</div></div>
       </div>
     </div>
     <div class="sgrid sgrid3">
@@ -401,13 +405,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="bd-split">
       <div class="accent-card">
         <div class="sval" id="bdUpper" style="margin-bottom:2px">—</div>
-        <div class="slbl" style="margin-bottom:10px">Верхняя граница</div>
+        <div class="slbl" style="margin-bottom:10px"><span class="ov-icon">💎</span>Верхняя граница</div>
         <div class="sval" id="bdLower" style="margin-bottom:2px">—</div>
-        <div class="slbl">Нижняя граница</div>
+        <div class="slbl"><span class="ov-icon">💎</span>Нижняя граница</div>
       </div>
       <div class="bd-split-right">
-        <div class="scard"><div class="sval" id="bdStepPct">—</div><div class="slbl">Шаг цены, %</div></div>
-        <div class="scard"><div class="sval" id="bdStepAbs">—</div><div class="slbl">Шаг цены</div></div>
+        <div class="scard"><div class="sval" id="bdStepPct">—</div><div class="slbl"><span class="ov-icon">💎</span>Шаг цены, %</div></div>
+        <div class="scard"><div class="sval" id="bdStepAbs">—</div><div class="slbl"><span class="ov-icon">💎</span>Шаг цены</div></div>
       </div>
     </div>
   </div>
@@ -983,18 +987,23 @@ async function fetchBotDetail() {
 
     const fmtUsd = v => (v >= 0 ? '+' : '') + '$' + v.toFixed(2);
     const netClass = 'sval' + (netProfit < 0 ? ' neg' : '');
-    document.getElementById('bdProfit').textContent = fmtUsd(netProfit);
-    document.getElementById('bdProfit').className = netClass;
-    document.getElementById('bdRealizedPnl1').textContent = fmtUsd(netProfit);
-    document.getElementById('bdRealizedPnl1').className = netClass;
-    document.getElementById('bdRealizedPnl2').textContent = fmtUsd(netProfit);
-    document.getElementById('bdRealizedPnl2').className = netClass;
-    document.getElementById('bdGridProfit').textContent = fmtUsd(profit);
-    document.getElementById('bdGridProfit').className = 'sval' + (profit < 0 ? ' neg' : '');
     // Общий PnL = реализованная net-прибыль циклов сетки + нереализованный
     // P&L ещё открытой части позиции по текущей цене (d.totalProfit с
     // сервера уже включает оба компонента — см. computeOpenPosition).
     const totalProfit = d.totalProfit != null ? d.totalProfit : netProfit;
+    const totalClass = 'sval' + (totalProfit < 0 ? ' neg' : '');
+    // "Общая прибыль" (наверху и в Main info) — это ИМЕННО totalProfit
+    // (с учётом открытой позиции), а не только реализованная сетка —
+    // отдельно от "Реализованный PnL"/"Прибыль сетки" ниже, которые
+    // намеренно показывают только закрытые циклы без движения актива.
+    document.getElementById('bdProfit').textContent = fmtUsd(totalProfit);
+    document.getElementById('bdProfit').className = totalClass;
+    document.getElementById('bdRealizedPnl1').textContent = fmtUsd(totalProfit);
+    document.getElementById('bdRealizedPnl1').className = totalClass;
+    document.getElementById('bdRealizedPnl2').textContent = fmtUsd(netProfit);
+    document.getElementById('bdRealizedPnl2').className = netClass;
+    document.getElementById('bdGridProfit').textContent = fmtUsd(profit);
+    document.getElementById('bdGridProfit').className = 'sval' + (profit < 0 ? ' neg' : '');
     document.getElementById('bdTotalPnl').textContent = fmtUsd(totalProfit);
     document.getElementById('bdTotalPnl').className = 'sval' + (totalProfit < 0 ? ' neg' : '');
 
@@ -1009,7 +1018,10 @@ async function fetchBotDetail() {
     // этого бота (см. getExecutionDetails в bot.js) — больше не "—".
     document.getElementById('bdFees').textContent = '$' + fees.toFixed(2);
 
-    document.getElementById('bdSymbol').textContent = d.symbol || '—';
+    const pairMeta = baseCoinMeta(d.symbol || 'ETHUSDT');
+    document.getElementById('bdPairCoin').textContent = pairMeta.icon;
+    document.getElementById('bdPairCoin').style.background = pairMeta.color;
+    document.getElementById('bdPairText').textContent = (d.symbol || '—').replace('USDT', '/USDT');
     // Объём — сумма ЗАКРЫТЫХ сделок (closedVolume в bot.js), не сумма
     // инвестиции/обеспечения (реальная жалоба: это были две одинаковые
     // цифры, хотя "объём" должен расти по мере реальных закрытых циклов).
