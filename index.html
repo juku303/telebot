@@ -944,7 +944,8 @@ async function fetchBotDetail() {
     document.getElementById('bdLeverage').textContent = (d.leverage != null ? d.leverage : 1) + 'X';
     document.getElementById('bdFilled').textContent = d.filledOrders || 0;
 
-    document.getElementById('bdGridType').textContent = (d.gridCount != null ? d.gridCount : '—') + ' (Арифметическая)';
+    const gridTypeLabel = GRID_TYPE_LABELS[d.gridType] || GRID_TYPE_LABELS.arithmetic;
+    document.getElementById('bdGridType').textContent = (d.gridCount != null ? d.gridCount : '—') + ' (' + gridTypeLabel + ')';
     document.getElementById('bdUpper').textContent = d.upperPrice != null ? '$' + d.upperPrice : '—';
     document.getElementById('bdLower').textContent = d.lowerPrice != null ? '$' + d.lowerPrice : '—';
     document.getElementById('bdStepAbs').textContent = step != null ? '$' + step.toFixed(2) : '—';
@@ -1029,6 +1030,12 @@ let wizardSymbol = null;
 let wizardDirection = 'Short';
 let wizardMode = 'range';
 let wizardGridType = 'arithmetic';
+// Общая подпись типа сетки для отображения (детальная страница бота, шаг 4
+// мастера) — раньше строка "(Арифметическая)" на детальной странице была
+// захардкожена и показывалась для ЛЮБОГО типа сетки, независимо от
+// реального d.gridType с сервера (нашли по жалобе: два бота с разными
+// типами сетки оба показывали "Арифметическая").
+const GRID_TYPE_LABELS = { arithmetic: 'Арифметическая', geometric: 'Геометрическая', exponential: 'Экспоненциальная' };
 let wizardGridCurvature = 2;
 let tvWidget = null;
 let tvWidget2 = null;
@@ -1092,6 +1099,7 @@ let wizardFeeRateSource = 'default';
 // сетки комиссию. Подгружаются на шаге 3 (см. setupInvestStep).
 let wizardMinOrderQty = null;
 let wizardMinNotional = null;
+let wizardQtyStep = null;
 
 async function loadWizardFeeRate(symbol) {
   wizardFeeRatePct = null;
@@ -1434,7 +1442,6 @@ function renderFinalizeSummary(levels, orderSizeEth, feeRatePct, netProfitPerOrd
   const meta = baseCoinMeta(wizardSymbol);
   const lower = parseFloat(document.getElementById('lowerInput2').value);
   const upper = parseFloat(document.getElementById('upperInput2').value);
-  const gridTypeLabels = { arithmetic: 'Арифметическая', geometric: 'Геометрическая', exponential: 'Экспоненциальная' };
   const { minStep, minStepMid } = worstStepPair(levels);
 
   document.getElementById('finalizeTitle').textContent =
@@ -1442,7 +1449,7 @@ function renderFinalizeSummary(levels, orderSizeEth, feeRatePct, netProfitPerOrd
   document.getElementById('finalPair').textContent = wizardSymbol.replace('USDT', '/USDT');
   document.getElementById('finalDirection').textContent = wizardDirection === 'Short' ? 'Short ↘' : 'Long ↗';
   document.getElementById('finalRange').textContent = '$' + lower + ' — $' + upper;
-  document.getElementById('finalGridType').textContent = gridTypeLabels[wizardGridType] || wizardGridType;
+  document.getElementById('finalGridType').textContent = GRID_TYPE_LABELS[wizardGridType] || wizardGridType;
   document.getElementById('finalGridCount').textContent = levels.length - 1;
   document.getElementById('finalStepPct').textContent = ((minStep / minStepMid) * 100).toFixed(3) + '%';
   document.getElementById('finalStepAbs').textContent = '$' + minStep.toFixed(2);
@@ -1535,11 +1542,22 @@ function setupInvestStep() {
 
   wizardMinOrderQty = null;
   wizardMinNotional = null;
+  wizardQtyStep = null;
   fetch(API_BASE + '/api/instrument-info?symbol=' + wizardSymbol)
     .then(r => r.json())
     .then(d => {
       if (d.minOrderQty != null) wizardMinOrderQty = d.minOrderQty;
       if (d.minNotionalValue != null) wizardMinNotional = d.minNotionalValue;
+      if (d.qtyStep != null) wizardQtyStep = d.qtyStep;
+      // Размер ордера мог уже быть выставлен (дефолт при выборе пары) до
+      // того, как этот реальный шаг количества подгрузился — выровнять его
+      // сейчас, а не только при следующем ручном изменении суммы/размера.
+      if (wizardQtyStep) {
+        const input = document.getElementById('orderSizeInput');
+        const cur = parseFloat(input.value);
+        if (Number.isFinite(cur)) input.value = roundToQtyStep(cur, wizardQtyStep).toFixed(6);
+      }
+      renderInvestStats();
       checkOrderSizeMinimum();
     })
     .catch(() => {});
@@ -1570,6 +1588,19 @@ function checkOrderSizeMinimum() {
     warnEl.textContent = `✗ Минимум на Bybit — ${wizardMinOrderQty} ${meta.code}. Увеличьте размер ордера или сумму инвестиции.`;
     return;
   }
+  // Bybit требует, чтобы размер ордера был кратен qtyStep — иначе отклонит
+  // ЛЮБОЙ ордер с "Qty invalid", даже если он больше минимума (реальный
+  // случай: 0.015 ETH при шаге 0.01 — бот не смог поставить ни одного
+  // ордера). Округление при автоматическом расчёте из суммы инвестиции уже
+  // не даёт такого попасть — эта проверка на случай ручного ввода.
+  if (wizardQtyStep) {
+    const steps = orderSizeEth / wizardQtyStep;
+    if (Math.abs(steps - Math.round(steps)) > 1e-6) {
+      orderSizeMinOk = false;
+      warnEl.textContent = `✗ Размер ордера должен быть кратен ${wizardQtyStep} ${meta.code} (шаг количества на Bybit). Например: ${roundToQtyStep(orderSizeEth, wizardQtyStep)}.`;
+      return;
+    }
+  }
   if (wizardMinNotional != null && wizardLastPrice) {
     const notional = orderSizeEth * wizardLastPrice;
     if (notional < wizardMinNotional) {
@@ -1587,6 +1618,17 @@ function computeLevelsForInvest() {
   const gridCount = parseInt(document.getElementById('gridCountInput').value, 10);
   if (!lower || !upper || !gridCount || upper <= lower) return null;
   return calcGridLevelsClient(lower, upper, gridCount, wizardGridType, wizardGridCurvature);
+}
+
+/** Округлить к ближайшему валидному размеру ордера по реальному биржевому
+ *  шагу количества (qtyStep с Bybit, например 0.01 для ETHUSDT) — иначе
+ *  Bybit отклоняет ЛЮБОЙ ордер с "Qty invalid", даже если размер больше
+ *  минимума. Округляем к ближайшему, а не только вниз — обратная формула
+ *  из суммы инвестиции может дать сколько угодно "рваное" число. */
+function roundToQtyStep(qty, step) {
+  if (!step) return qty;
+  const decimals = (step.toString().split('.')[1] || '').length;
+  return parseFloat((Math.round(qty / step) * step).toFixed(decimals));
 }
 
 /** Необходимое обеспечение для заданного размера ордера — см. комментарий
@@ -1661,8 +1703,9 @@ function renderInvestStats() {
   let orderSizeEth = parseFloat(orderSizeInput.value);
 
   if (investDriverField === 'amount') {
-    const derivedSize = orderSizeForRequiredUsdt(getInvestmentUsdt(), levels);
+    let derivedSize = orderSizeForRequiredUsdt(getInvestmentUsdt(), levels);
     if (derivedSize != null && derivedSize > 0) {
+      if (wizardQtyStep) derivedSize = roundToQtyStep(derivedSize, wizardQtyStep);
       orderSizeEth = derivedSize;
       orderSizeInput.value = derivedSize.toFixed(6);
     }
