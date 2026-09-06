@@ -7,7 +7,7 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#000000;--card:#161618;--border:#232326;--accent:#00e5a0;--accent2:#7c5cff;--red:#ff4d6a;--text:#f2f2f4;--muted:#8a8a92;--mono:'Space Mono',monospace;--sans:'DM Sans',sans-serif}
+:root{--bg:#000000;--card:#161618;--border:#232326;--accent:#00e5a0;--accent2:#7c5cff;--red:#ff4d6a;--warn:#ff9f0a;--text:#f2f2f4;--muted:#8a8a92;--mono:'Space Mono',monospace;--sans:'DM Sans',sans-serif}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
 .header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px}
@@ -15,7 +15,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:8px;transition:background .3s}
 .dot.on{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.pair{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--card);padding:4px 10px;border-radius:6px;border:1px solid var(--border)}
 .page{padding:0 16px 100px;animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
@@ -159,6 +158,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .ac-copy:active{opacity:1}
 .ac-badge{font-family:var(--mono);font-size:10px;color:var(--muted);background:rgba(138,138,146,.15);border:1px solid rgba(138,138,146,.3);border-radius:8px;padding:3px 9px}
 .ac-badge.active{color:var(--accent);background:rgba(0,229,160,.12);border-color:rgba(0,229,160,.3)}
+.ac-badge.out-of-range{color:var(--warn);background:rgba(255,159,10,.12);border-color:rgba(255,159,10,.3)}
 .ac-dir{font-family:var(--mono)}
 .ac-dir.short{color:var(--red)}
 .ac-dir.long{color:var(--accent2)}
@@ -170,6 +170,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .ov-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .ov-badge{font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 13px;border-radius:20px;background:rgba(124,92,255,.18);color:var(--accent2)}
 .ov-badge.running{background:rgba(0,229,160,.15);color:var(--accent)}
+.ov-badge.out-of-range{background:rgba(255,159,10,.15);color:var(--warn)}
 .ov-pair-row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
 .ov-coin{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;flex-shrink:0}
 .ov-pair-row h3{font-size:15px;font-weight:600;margin-bottom:2px}
@@ -187,7 +188,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 <body>
 <div class="header">
   <div class="logo"><span class="dot" id="dot"></span>БОТЫ</div>
-  <div class="pair">ETH/USDT</div>
 </div>
 
 <!-- ── Список ботов (аналог экрана Bybit "Боты") ── -->
@@ -208,7 +208,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="bot-icon">🤖</div>
     <div class="bot-info">
       <h3>Фьючерсные боты</h3>
-      <p id="futuresListSub">Загрузка…</p>
     </div>
     <div class="chev">›</div>
   </div>
@@ -235,15 +234,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
   <input class="search-input" id="futuresSearch" placeholder="Поиск" oninput="filterFuturesRows(this.value)">
 
+  <button class="btn-start" style="margin-bottom:16px" onclick="openPairPicker('futures')">Создать +</button>
+
   <div id="futuresActiveTab">
-    <div class="bot-row" onclick="openFutures()">
-      <div class="bot-icon">🤖</div>
-      <div class="bot-info">
-        <h3>ETHUSDT</h3>
-        <p id="futuresSub">Загрузка…</p>
-      </div>
-      <div class="chev">›</div>
-    </div>
     <div id="createdBotsList"></div>
   </div>
 
@@ -259,8 +252,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div style="font-size:48px; margin-bottom:12px">🤖</div>
     <div>Боты не найдены</div>
   </div>
-
-  <button class="btn-start" style="margin-top:8px" onclick="openPairPicker('futures')">Создать +</button>
 </div>
 
 <!-- ── Список спот-ботов: та же структура (переключатель/поиск/карточки),
@@ -810,6 +801,22 @@ function roundPrice(x) {
   return (Math.round(x * 100) / 100).toString();
 }
 
+/**
+ * Статус бота: "Активен"/зелёный больше не значит просто "процесс работает" —
+ * важнее, попадает ли ТЕКУЩАЯ рыночная цена в заданный диапазон бота.
+ * Остановленный бот — как и раньше, просто "Остановлен". Работающий делится
+ * на два разных состояния: "В диапазоне" (зелёный, как было у "Активен") и
+ * "Вне диапазона" (оранжевый) — цена ушла за верхнюю/нижнюю границу, сетка
+ * либо ждёт возврата цены, либо уже вся исполнилась в одну сторону.
+ */
+function computeStatusBadge(b) {
+  if (!b.running) return { text: 'Остановлен', state: 'stopped' };
+  const hasRange = b.lowerPrice != null && b.upperPrice != null && b.currentPrice != null;
+  if (!hasRange) return { text: 'Активен', state: 'ok' };
+  const inRange = b.currentPrice >= b.lowerPrice && b.currentPrice <= b.upperPrice;
+  return inRange ? { text: 'В диапазоне', state: 'ok' } : { text: 'Вне диапазона', state: 'warn' };
+}
+
 function renderBotCard(b) {
   // netProfit = валовая прибыль по спреду минус реально списанные Bybit
   // комиссии (см. getExecutionDetails в bot.js) — "Прибыль по сеткам":
@@ -822,8 +829,9 @@ function renderBotCard(b) {
   // "если закрыть бота прямо сейчас по рынку, будет прибыль или убыток".
   const totalProfit = b.totalProfit != null ? b.totalProfit : netProfit;
   const meta = baseCoinMeta(b.symbol || 'ETHUSDT');
-  const badgeClass = 'ov-badge' + (b.running ? ' running' : '');
-  const badgeText = b.running ? 'Активен' : 'Остановлен';
+  const status = computeStatusBadge(b);
+  const badgeClass = 'ov-badge' + (status.state === 'ok' ? ' running' : status.state === 'warn' ? ' out-of-range' : '');
+  const badgeText = status.text;
   const closeLine = b.stoppedAt ? `<p>Закрытие: ${formatDate(b.stoppedAt)}</p>` : '';
   const dirIcon = b.direction === 'Short' ? '🔻' : '🔺';
 
@@ -978,8 +986,9 @@ async function fetchBotDetail() {
     const midPrice = (d.upperPrice + d.lowerPrice) / 2;
     const stepPct = step != null ? (step / midPrice * 100) : null;
 
-    document.getElementById('bdStatusBadge').textContent = d.running ? 'Активен' : 'Остановлен';
-    document.getElementById('bdStatusBadge').className = 'ac-badge' + (d.running ? ' active' : '');
+    const status = computeStatusBadge(d);
+    document.getElementById('bdStatusBadge').textContent = status.text;
+    document.getElementById('bdStatusBadge').className = 'ac-badge' + (status.state === 'ok' ? ' active' : status.state === 'warn' ? ' out-of-range' : '');
     document.getElementById('bdDates').textContent =
       'Запуск: ' + formatDate(d.startTime) + (d.stoppedAt ? ' · Закрыт: ' + formatDate(d.stoppedAt) : '');
     document.getElementById('bdIdText').textContent = currentBotDetailId;
@@ -2135,18 +2144,31 @@ async function confirmRangeStep() {
   }
 }
 
-/** Подгружает список ботов, созданных через мастер (кроме встроенного ETH), и рисует их в общем списке */
+/** Подгружает список ботов, созданных через мастер (кроме встроенного ETH),
+ *  рисует их в общем списке И заодно считает общий PnL за выбранный период
+ *  по ВСЕМ ботам реестра для карточки на главном экране — раньше эта
+ *  карточка честно запрашивала общий PnL, но у legacy-эндпоинта /api/status
+ *  (одиночный старый ETH-бот, давно остановлен), а не у реестра, где сейчас
+ *  реально живут боты — отсюда всегда "$0.00" независимо от их реальной
+ *  прибыли. ?days=currentPeriod передаём тем же запросом, что и карточки —
+ *  periodProfit/periodTrades не влияют на остальные поля payload'а. */
 async function loadCreatedBots() {
   const container = document.getElementById('createdBotsList');
-  const listSub = document.getElementById('futuresListSub');
   try {
-    const r = await fetch(BOTS_API);
+    const r = await fetch(BOTS_API + '?days=' + currentPeriod);
     const bots = await r.json();
     // В "Активные" попадают только реально работающие — остановленные того
     // же реестра показываются в "Архив" (loadArchiveBots), не одновременно
     // в обеих вкладках.
     container.innerHTML = bots.filter(b => b.running).map(renderBotCard).join('');
-    if (listSub) listSub.textContent = (1 + bots.length) + ' бот' + (bots.length === 0 ? '' : 'ов');
+
+    const periodProfit = bots.reduce((sum, b) => sum + (b.periodProfit || 0), 0);
+    const periodTrades = bots.reduce((sum, b) => sum + (b.periodTrades || 0), 0);
+    const pnlVal = document.getElementById('pnlVal');
+    pnlVal.textContent = (periodProfit >= 0 ? '+' : '') + '$' + periodProfit.toFixed(2);
+    pnlVal.className = 'pnl-val' + (periodProfit < 0 ? ' neg' : '');
+    document.getElementById('pnlLbl').textContent =
+      `Общий PnL · ${PERIOD_LABELS[currentPeriod]} · ${periodTrades} сделок (по логу)`;
   } catch (e) {
     // тихо — это дополнительный список, не критично, если не подгрузился
   }
@@ -2165,7 +2187,7 @@ document.getElementById('periodRow').addEventListener('click', e => {
   document.querySelectorAll('.period-pill').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   currentPeriod = btn.dataset.p;
-  fetchStatus();
+  loadCreatedBots();
 });
 
 function stopBot() {
@@ -2197,20 +2219,10 @@ async function fetchStatus() {
     badge.classList.remove('off', 'stopped');
     if (d.running) {
       badge.textContent = '🟢 LIVE — реальные данные';
-      document.getElementById('futuresSub').textContent =
-        (d.symbol || '') + ' · ' + (d.direction || '') + ' · ' + (d.gridCount != null ? d.gridCount : '?') + ' сеток';
     } else {
       badge.textContent = '⏸ Бот остановлен';
       badge.classList.add('stopped');
-      document.getElementById('futuresSub').textContent = 'Остановлен · /run в Telegram';
     }
-
-    // Список ботов — прибыль за выбранный период (оценка по bot.log)
-    const periodProfit = d.periodProfit || 0;
-    document.getElementById('pnlVal').textContent = (periodProfit >= 0 ? '+' : '') + '$' + periodProfit.toFixed(2);
-    document.getElementById('pnlVal').className = 'pnl-val' + (periodProfit < 0 ? ' neg' : '');
-    document.getElementById('pnlLbl').textContent =
-      `Общий PnL · ${PERIOD_LABELS[currentPeriod]} · ${d.periodTrades || 0} сделок (по логу)`;
 
     // Детальный экран — реальный текущий счётчик прибыли бота, без привязки к периоду
     const profit = d.profit || 0;
