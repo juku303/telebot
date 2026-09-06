@@ -14,6 +14,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .logo{font-family:var(--mono);font-size:13px;color:var(--muted);letter-spacing:2px;display:flex;align-items:center}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:8px;transition:background .3s}
 .dot.on{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 2s infinite}
+.dot.warn{background:var(--warn);box-shadow:0 0 8px var(--warn);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .page{padding:0 16px 100px;animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -693,10 +694,14 @@ function openFuturesList() {
   document.getElementById('futuresArchiveTab').style.display = 'none';
   document.getElementById('futuresSearch').value = '';
   loadCreatedBots();
+  // Плавающий "+" ведёт туда же, куда и кнопка "Создать +" наверху этого
+  // списка — на этом экране он просто дублирует её, убираем.
+  hideFab();
 }
 function closeFuturesList() {
   document.getElementById('page-futures-list').style.display = 'none';
   document.getElementById('page-list').style.display = 'block';
+  showFab();
 }
 
 function openSpotList() {
@@ -1182,7 +1187,8 @@ function openPairPicker(botType) {
 function closePair() {
   document.getElementById('page-pair').style.display = 'none';
   document.getElementById('page-futures-list').style.display = 'block';
-  showFab();
+  // Возврат на список фьючерс-ботов — там уже есть кнопка "Создать +"
+  // наверху, плавающий "+" на этом экране остаётся скрытым (см. openFuturesList).
 }
 function filterPairs(q) {
   const query = q.trim().toLowerCase();
@@ -2133,7 +2139,8 @@ async function confirmRangeStep() {
     toast('✅ Бот создан и запущен: ' + id);
     hideAllPages();
     document.getElementById('page-futures-list').style.display = 'block';
-    showFab();
+    // Плавающий "+" здесь остаётся скрытым — на списке фьючерс-ботов уже
+    // есть кнопка "Создать +" наверху (см. openFuturesList).
     loadCreatedBots();
   } catch (e) {
     statusEl.textContent = '';
@@ -2169,6 +2176,19 @@ async function loadCreatedBots() {
     pnlVal.className = 'pnl-val' + (periodProfit < 0 ? ' neg' : '');
     document.getElementById('pnlLbl').textContent =
       `Общий PnL · ${PERIOD_LABELS[currentPeriod]} · ${periodTrades} сделок (по логу)`;
+
+    // Точка у "БОТЫ" в шапке — сводный статус по ВСЕМ ботам реестра: зелёная,
+    // если хоть один в диапазоне (приоритет — это "всё хорошо, хотя бы один
+    // торгует как надо"), оранжевая, если работающие боты есть, но НИ ОДИН
+    // не в диапазоне, и оставляем как есть (не трогаем класс), если работающих
+    // ботов нет вообще — архив ничего не говорит о текущем статусе.
+    const statuses = bots.map(computeStatusBadge);
+    const dot = document.getElementById('dot');
+    if (statuses.some(s => s.state === 'ok')) {
+      dot.className = 'dot on';
+    } else if (statuses.some(s => s.state === 'warn')) {
+      dot.className = 'dot warn';
+    }
   } catch (e) {
     // тихо — это дополнительный список, не критично, если не подгрузился
   }
@@ -2204,7 +2224,6 @@ async function fetchStatus() {
     const r = await fetch(API + '?days=' + currentPeriod);
     const d = await r.json();
     lastPayload = d;
-    const dot = document.getElementById('dot');
     const badge = document.getElementById('liveBadge');
 
     if (d.lowerPrice != null && d.upperPrice != null) {
@@ -2213,8 +2232,6 @@ async function fetchStatus() {
     if (d.gridCount != null) document.getElementById('pGrid').textContent = d.gridCount;
     if (d.direction) document.getElementById('pDir').textContent = d.direction;
     if (d.leverage != null) document.getElementById('pLev').textContent = d.leverage + 'x';
-
-    dot.className = d.running ? 'dot on' : 'dot';
 
     badge.classList.remove('off', 'stopped');
     if (d.running) {
