@@ -152,19 +152,33 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 20px;font-size:13px;color:var(--text);opacity:0;transition:all .3s;z-index:999;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-.archive-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:12px;cursor:pointer}
-.ac-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .ac-id{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
 .ac-copy{cursor:pointer;opacity:.7}
 .ac-copy:active{opacity:1}
 .ac-badge{font-family:var(--mono);font-size:10px;color:var(--muted);background:rgba(138,138,146,.15);border:1px solid rgba(138,138,146,.3);border-radius:8px;padding:3px 9px}
 .ac-badge.active{color:var(--accent);background:rgba(0,229,160,.12);border-color:rgba(0,229,160,.3)}
-.ac-pair-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
-.ac-pair-row h3{font-size:15px;font-weight:600;margin-bottom:2px}
-.ac-pair-row p{font-size:11px;color:var(--muted)}
 .ac-dir{font-family:var(--mono)}
 .ac-dir.short{color:var(--red)}
 .ac-dir.long{color:var(--accent2)}
+
+/* Карточка обзора бота (список активных/архив) — по образцу реальной
+   карточки Bybit (ID+статус сверху, пара+даты, сетка из 6 показателей,
+   декоративная иллюстрация с кнопкой-стрелкой в углу). */
+.ov-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;cursor:pointer;position:relative;overflow:hidden}
+.ov-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.ov-badge{font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 13px;border-radius:20px;background:rgba(124,92,255,.18);color:var(--accent2)}
+.ov-badge.running{background:rgba(0,229,160,.15);color:var(--accent)}
+.ov-pair-row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.ov-coin{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;flex-shrink:0}
+.ov-pair-row h3{font-size:15px;font-weight:600;margin-bottom:2px}
+.ov-pair-row p{font-size:11px;color:var(--muted);line-height:1.5}
+.ov-grid{display:grid;grid-template-columns:1fr 1fr;row-gap:14px;column-gap:10px;position:relative;z-index:1;padding-right:54px}
+.ov-val{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;white-space:nowrap}
+.ov-val.neg{color:var(--red)}
+.ov-lbl{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
+.ov-icon{font-size:12px;line-height:1}
+.ov-art{position:absolute;right:8px;bottom:44px;font-size:36px;opacity:.45;pointer-events:none}
+.ov-arrow{position:absolute;right:14px;bottom:14px;width:30px;height:30px;border-radius:50%;background:var(--accent2);color:#fff;border:none;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2}
 .section-title{font-size:13px;color:var(--muted);font-weight:600;margin:18px 2px 10px}
 </style>
 </head>
@@ -742,7 +756,7 @@ function filterSpotRows(q) {}
 function filterFuturesRows(q) {
   const query = q.trim().toLowerCase();
   if (futuresTab === 'archive') {
-    const cards = document.querySelectorAll('#archiveList .archive-card');
+    const cards = document.querySelectorAll('#archiveList .ov-card');
     let anyVisible = false;
     cards.forEach(card => {
       const match = card.textContent.toLowerCase().includes(query);
@@ -752,7 +766,7 @@ function filterFuturesRows(q) {
     document.getElementById('archiveEmptyState').style.display = anyVisible ? 'none' : 'block';
     return;
   }
-  const rows = document.querySelectorAll('#futuresActiveTab .bot-row, #futuresActiveTab .archive-card');
+  const rows = document.querySelectorAll('#futuresActiveTab .bot-row, #futuresActiveTab .ov-card');
   let anyVisible = false;
   rows.forEach(row => {
     const match = row.textContent.toLowerCase().includes(query);
@@ -776,36 +790,67 @@ function copyId(id) {
  *  в реестр /api/bots не входит, у него нет id и отдельного архива). */
 /** Одна и та же карточка для активных и архивных фьючерс-ботов — отличаются
  *  только бейджем статуса и наличием "Закрыт: ..." во второй строке дат. */
+/**
+ * Карточка бота для списков "Активные"/"Архив" — по образцу реальной
+ * карточки Bybit (скриншот пользователя): ID+статус сверху, пара+даты,
+ * 6 показателей в сетке 2×3, декоративная иллюстрация со стрелкой в углу.
+ * Активные и архивные боты используют ОДНУ И ТУ ЖЕ карточку, отличие
+ * только в бейдже статуса и наличии "Закрытие: ..." во второй строке дат
+ * (см. b.running/b.stoppedAt) — то же решение, что было и раньше.
+ */
 function renderBotCard(b) {
   // netProfit = валовая прибыль по спреду минус реально списанные Bybit
   // комиссии (см. getExecutionDetails в bot.js) — честная итоговая цифра,
   // а не оценка "до комиссии".
   const netProfit = b.netProfit != null ? b.netProfit : ((b.profit || 0) - (b.fees || 0));
-  const dirClass = b.direction === 'Short' ? 'short' : 'long';
-  const badgeClass = 'ac-badge' + (b.running ? ' active' : '');
+  const grossProfit = b.profit || 0;
+  const meta = baseCoinMeta(b.symbol || 'ETHUSDT');
+  const badgeClass = 'ov-badge' + (b.running ? ' running' : '');
   const badgeText = b.running ? 'Активен' : 'Остановлен';
-  const dates = 'Запуск: ' + formatDate(b.startTime) + (b.stoppedAt ? ' · Закрыт: ' + formatDate(b.stoppedAt) : '');
+  const closeLine = b.stoppedAt ? `<p>Закрытие: ${formatDate(b.stoppedAt)}</p>` : '';
+  const dirIcon = b.direction === 'Short' ? '🔻' : '🔺';
   return `
-    <div class="archive-card" onclick="openBotDetail('${b.id}')">
-      <div class="ac-top">
+    <div class="ov-card" onclick="openBotDetail('${b.id}')">
+      <div class="ov-top">
         <span class="ac-id">ID: ${b.id} <span class="ac-copy" onclick="event.stopPropagation(); copyId('${b.id}')">⧉</span></span>
         <span class="${badgeClass}">${badgeText}</span>
       </div>
-      <div class="ac-pair-row">
-        <div class="bot-icon" style="font-size:20px">${b.direction === 'Short' ? '🔻' : '🔺'}</div>
+      <div class="ov-pair-row">
+        <div class="ov-coin" style="background:${meta.color}">${meta.icon}</div>
         <div>
-          <h3>${b.symbol}</h3>
-          <p>${dates}</p>
+          <h3>${(b.symbol || '').replace('USDT', '/USDT')}</h3>
+          <p>Запуск: ${formatDate(b.startTime)}</p>
+          ${closeLine}
         </div>
       </div>
-      <div class="sgrid" style="margin-bottom:10px">
-        <div class="scard"><div class="sval ac-dir ${dirClass}">${b.lowerPrice}–${b.upperPrice}</div><div class="slbl">${b.direction || '—'}</div></div>
-        <div class="scard"><div class="sval">${b.currentPrice != null ? b.currentPrice : '—'}</div><div class="slbl">Текущая цена</div></div>
+      <div class="ov-grid">
+        <div>
+          <div class="ov-val">${b.lowerPrice} ⇄ ${b.upperPrice}</div>
+          <div class="ov-lbl"><span class="ov-icon">${dirIcon}</span>${b.direction || '—'}</div>
+        </div>
+        <div>
+          <div class="ov-val">${b.currentPrice != null ? b.currentPrice : '—'}</div>
+          <div class="ov-lbl"><span class="ov-icon">💲</span>Текущая цена</div>
+        </div>
+        <div>
+          <div class="ov-val">${b.leverage != null ? b.leverage : 1}x</div>
+          <div class="ov-lbl"><span class="ov-icon">📊</span>Объём</div>
+        </div>
+        <div>
+          <div class="ov-val">${b.investmentUsdt != null ? '$' + b.investmentUsdt : '—'}</div>
+          <div class="ov-lbl"><span class="ov-icon">🛡</span>Маржа</div>
+        </div>
+        <div>
+          <div class="ov-val">$${grossProfit.toFixed(2)}</div>
+          <div class="ov-lbl"><span class="ov-icon">💰</span>Прибыль по ордерам</div>
+        </div>
+        <div>
+          <div class="ov-val${netProfit < 0 ? ' neg' : ''}">${(netProfit >= 0 ? '+' : '') + '$' + netProfit.toFixed(2)}</div>
+          <div class="ov-lbl"><span class="ov-icon">💎</span>Общая прибыль</div>
+        </div>
       </div>
-      <div class="sgrid">
-        <div class="scard"><div class="sval">${b.investmentUsdt != null ? '$' + b.investmentUsdt : '—'}</div><div class="slbl">Обеспечение</div></div>
-        <div class="scard"><div class="sval${netProfit < 0 ? ' neg' : ''}">${(netProfit >= 0 ? '+' : '') + '$' + netProfit.toFixed(2)}</div><div class="slbl">Прибыль</div></div>
-      </div>
+      <div class="ov-art">🤖</div>
+      <button type="button" class="ov-arrow" onclick="event.stopPropagation(); openBotDetail('${b.id}')">›</button>
     </div>`;
 }
 
