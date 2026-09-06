@@ -93,6 +93,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .readonly-box label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px}
 .readonly-box .rval{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--text)}
 .btn-stub{width:100%;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;color:var(--muted);font-size:14px;text-align:left;margin-bottom:16px;cursor:not-allowed;opacity:.6;display:flex;justify-content:space-between;align-items:center}
+.stat-list{background:var(--card);border-radius:14px;padding:2px 14px;margin-bottom:16px}
+.stat-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border)}
+.stat-row:last-child{border-bottom:none}
+.stat-row label{font-size:12px;color:var(--muted)}
+.stat-row .stat-val{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text);text-align:right;white-space:nowrap}
+.stat-row .stat-val.input-val{display:flex;align-items:center;gap:6px}
+.stat-row .stat-val input{width:90px;background:none;border:none;color:var(--text);font-family:var(--mono);font-size:14px;font-weight:700;text-align:right}
+.stat-row .stat-val input:focus{outline:none}
+.stat-row .stat-unit{font-size:12px;color:var(--muted)}
 .range-box.disabled{opacity:.45}
 .range-box.disabled input,.range-box.disabled .stepper-btn{pointer-events:none}
 .level-viz-wrap{background:var(--card);border-radius:16px;padding:12px 14px;margin-bottom:16px}
@@ -517,9 +526,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     </div>
   </div>
 
-  <div class="readonly-box">
-    <label>Доступно USDT (Единый торговый)</label>
-    <div class="rval" id="availableBalanceVal">—</div>
+  <div class="stat-list">
+    <div class="stat-row">
+      <label>Доступно USDT (Единый торговый)</label>
+      <div class="stat-val" id="availableBalanceVal">—</div>
+    </div>
+    <div class="stat-row">
+      <label>Размер ордера</label>
+      <div class="stat-val input-val">
+        <input id="orderSizeInput" type="number" step="0.0001" placeholder="0.01" value="0.01" oninput="renderInvestStats()">
+        <span class="stat-unit" id="orderSizeUnit">ETH</span>
+      </div>
+    </div>
+    <div class="stat-row">
+      <label>Прибыль на ордер</label>
+      <div class="stat-val" id="profitPerOrderVal">—</div>
+    </div>
+    <div class="stat-row">
+      <label>Необходимое обеспечение</label>
+      <div class="stat-val" id="requiredInvestVal">—</div>
+    </div>
   </div>
 
   <div class="wizard-nav">
@@ -529,17 +555,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   </div>
 </div>
 
-<!-- ── Мастер создания: временная заглушка для оставшихся полей (объём,
-     проверка комиссии, запуск) — реальный шаг 4 ещё не спроектирован,
-     это не претендует быть финальным дизайном, просто чтобы бот было чем
-     реально создать прямо сейчас. ── -->
+<!-- ── Мастер создания: временная заглушка для оставшихся полей (проверка
+     комиссии, запуск) — реальный шаг 4 ещё не спроектирован, это не
+     претендует быть финальным дизайном, просто чтобы бот было чем реально
+     создать прямо сейчас. Размер ордера теперь вводится на шаге 3 (нужен
+     там для расчёта необходимого обеспечения), здесь только его результат. ── -->
 <div class="page" id="page-finalize" style="display:none">
   <div class="back-row" onclick="backToInvestStep()">← Назад</div>
   <div class="wizard-title" id="finalizeTitle">Создание фьючерс бота</div>
-
-  <div class="range-inputs">
-    <div class="range-box"><label>Размер ордера</label><input id="orderSizeInput" type="number" step="0.0001" placeholder="0.01" value="0.01"></div>
-  </div>
 
   <div class="fee-check" id="feeCheck"></div>
 
@@ -1223,6 +1246,7 @@ function setupInvestStep() {
   document.getElementById('pairChipBaseCoin').textContent = meta.icon;
   document.getElementById('pairChipBaseCoin').style.background = meta.color;
   document.getElementById('pairChipBaseLabel').textContent = meta.code;
+  document.getElementById('orderSizeUnit').textContent = meta.code;
 
   wizardInvestDenom = 'quote';
   document.getElementById('pairChipBase').classList.remove('active');
@@ -1236,7 +1260,7 @@ function setupInvestStep() {
   wizardLastPrice = null;
   fetch(API_BASE + '/api/price?symbol=' + wizardSymbol)
     .then(r => r.json())
-    .then(d => { if (d.price != null) wizardLastPrice = d.price; })
+    .then(d => { if (d.price != null) wizardLastPrice = d.price; renderInvestStats(); })
     .catch(() => {});
 
   const balEl = document.getElementById('availableBalanceVal');
@@ -1245,6 +1269,60 @@ function setupInvestStep() {
     .then(r => r.json())
     .then(d => { balEl.textContent = d.available != null ? '$' + d.available.toFixed(2) : '—'; })
     .catch(() => { balEl.textContent = '—'; });
+
+  renderInvestStats();
+}
+
+/**
+ * "Размер ордера", "Прибыль на ордер" и "Необходимое обеспечение" на шаге 3 —
+ * по образцу реальной формы Bybit (4 строки после суммы инвестиции), но
+ * адаптировано под нашу одностороннюю сетку: bot.js buildInitialGrid ставит
+ * открывающий ордер СРАЗУ НА КАЖДОМ уровне диапазона (см. gridLogic.js
+ * resolveOneSidedOrder), поэтому "обеспечение" — это капитал, необходимый,
+ * чтобы удержать открывающие ордера на ВСЕХ уровнях одновременно, а не
+ * futures-маржа с плечом, как у Bybit.
+ */
+function renderInvestStats() {
+  const profitEl = document.getElementById('profitPerOrderVal');
+  const reqEl = document.getElementById('requiredInvestVal');
+  const lower = parseFloat(document.getElementById('lowerInput2').value);
+  const upper = parseFloat(document.getElementById('upperInput2').value);
+  const gridCount = parseInt(document.getElementById('gridCountInput').value, 10);
+  const orderSizeEth = parseFloat(document.getElementById('orderSizeInput').value);
+
+  if (!lower || !upper || !gridCount || upper <= lower || !orderSizeEth || orderSizeEth <= 0) {
+    profitEl.textContent = '—';
+    reqEl.textContent = '—';
+    return;
+  }
+
+  const levels = calcGridLevelsClient(lower, upper, gridCount, wizardGridType, wizardGridCurvature);
+  const feeRatePct = wizardFeeRatePct != null ? wizardFeeRatePct : 0.055;
+
+  // Худший (минимальный) шаг между соседними уровнями — та же логика, что
+  // и в checkGridFee, чтобы "прибыль на ордер" не выглядела оптимистичнее
+  // фактической проверки прибыльности сетки после комиссии.
+  let minStep = Infinity, minStepMid = 0;
+  for (let i = 1; i < levels.length; i++) {
+    const step = levels[i] - levels[i - 1];
+    if (step < minStep) { minStep = step; minStepMid = (levels[i] + levels[i - 1]) / 2; }
+  }
+  const feeRoundTripUsdt = 2 * (feeRatePct / 100) * minStepMid * orderSizeEth;
+  const netProfit = minStep * orderSizeEth - feeRoundTripUsdt;
+  profitEl.textContent = '$' + netProfit.toFixed(netProfit < 1 ? 4 : 2);
+
+  if (wizardDirection === 'Short') {
+    // Short: открывающая сторона — Sell, обеспечение нужно в базовой валюте
+    // (её нужно физически держать на каждом уровне сетки).
+    const totalBase = orderSizeEth * levels.length;
+    reqEl.textContent = wizardLastPrice
+      ? '$' + (totalBase * wizardLastPrice).toFixed(2)
+      : totalBase.toFixed(6) + ' ' + baseCoinMeta(wizardSymbol).code;
+  } else {
+    // Long: открывающая сторона — Buy по номинальной цене каждого уровня.
+    const requiredUsdt = levels.reduce((sum, lvl) => sum + lvl * orderSizeEth, 0);
+    reqEl.textContent = '$' + requiredUsdt.toFixed(2);
+  }
 }
 
 document.getElementById('pairChipRow').addEventListener('click', e => {
