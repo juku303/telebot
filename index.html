@@ -840,13 +840,22 @@ function renderBotCard(b) {
   const closeLine = b.stoppedAt ? `<p>Закрытие: ${formatDate(b.stoppedAt)}</p>` : '';
   const dirIcon = b.direction === 'Short' ? '🔻' : '🔺';
 
-  // Текущая позиция — средняя цена НАБОРА открытой (ещё не закрытой)
-  // экспозиции (см. computeOpenPosition в server.js), а не рыночная цена.
-  // Цвет показывает то же самое, что и unrealizedPnl: закрой прямо сейчас
+  // Текущая позиция — РАЗМЕР открытой (ещё не закрытой) экспозиции со
+  // знаком (см. computeOpenPosition в server.js: b.openQty — количество
+  // базового актива, всегда положительное само по себе; знак ставим по
+  // направлению — Short означает "продали", то есть -qty, Long — "купили",
+  // +qty). Раньше здесь была средняя цена входа — по просьбе пользователя
+  // заменили на размер позиции, это понятнее на карточке списка. Цвет
+  // по-прежнему показывает то же, что и unrealizedPnl: закрой прямо сейчас
   // по рынку — в плюсе или в минусе.
-  const hasOpenPosition = b.avgEntryPrice != null;
+  const hasOpenPosition = b.openQty != null && b.openQty > 0;
   const positionClass = hasOpenPosition && b.unrealizedPnl < 0 ? ' neg' : '';
-  const positionVal = hasOpenPosition ? roundPrice(b.avgEntryPrice) : '—';
+  let positionVal = '—';
+  if (hasOpenPosition) {
+    const signedQty = b.direction === 'Short' ? -b.openQty : b.openQty;
+    const qtyStr = (Math.round(Math.abs(signedQty) * 1e6) / 1e6).toString();
+    positionVal = (signedQty >= 0 ? '+' : '−') + qtyStr + ' ' + meta.code;
+  }
 
   return `
     <div class="ov-card" onclick="openBotDetail('${b.id}')">
