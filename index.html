@@ -1025,8 +1025,13 @@ async function fetchBotDetail() {
     document.getElementById('bdRealizedPnl1').className = totalClass;
     document.getElementById('bdRealizedPnl2').textContent = fmtUsd(netProfit);
     document.getElementById('bdRealizedPnl2').className = netClass;
-    document.getElementById('bdGridProfit').textContent = fmtUsd(profit);
-    document.getElementById('bdGridProfit').className = 'sval' + (profit < 0 ? ' neg' : '');
+    // "Прибыль сетки" здесь и "Прибыль по сеткам" на карточке списка должны
+    // быть ОДНИМ И ТЕМ ЖЕ числом (реальная жалоба: на детальной странице
+    // было валовое profit без вычета комиссии, на карточке — netProfit,
+    // одно и то же по смыслу поле показывало два разных числа под похожими
+    // подписями). Показываем net — как и "Реализованный PnL" рядом.
+    document.getElementById('bdGridProfit').textContent = fmtUsd(netProfit);
+    document.getElementById('bdGridProfit').className = netClass;
     document.getElementById('bdTotalPnl').textContent = fmtUsd(totalProfit);
     document.getElementById('bdTotalPnl').className = 'sval' + (totalProfit < 0 ? ' neg' : '');
 
