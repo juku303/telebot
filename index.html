@@ -206,6 +206,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .strat-activate{background:var(--accent2);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-family:var(--mono);font-size:12px;font-weight:700;cursor:pointer}
 .strat-activate:disabled{background:var(--border);color:var(--muted);cursor:not-allowed}
 .strat-card.featured .strat-activate{background:#fff;color:#000}
+
+.strike-row{display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer}
+.strike-row.selected{border-color:var(--accent2);background:rgba(124,92,255,.1)}
+.strike-row .sr-strike{font-family:var(--mono);font-weight:700;font-size:15px}
+.strike-row .sr-mid{display:flex;gap:14px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.strike-row .sr-mid b{color:var(--text)}
+.strike-row .sr-badge{font-size:9px;font-family:var(--mono);color:var(--accent2);border:1px solid var(--accent2);border-radius:8px;padding:2px 6px}
+.chk-row{display:flex;align-items:center;gap:10px;padding:14px 2px;cursor:pointer;user-select:none}
+.chk-box{width:20px;height:20px;border-radius:6px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.chk-box.checked{background:var(--accent2);border-color:var(--accent2)}
+.chk-box.checked::after{content:'✓';color:#fff;font-size:13px;font-weight:700}
 </style>
 </head>
 <body>
@@ -492,6 +503,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div style="font-size:48px; margin-bottom:12px">🚀</div>
     <div>Активных стратегий нет</div>
   </div>
+</div>
+
+<!-- ── Выбор страйка для продажи покрытого call ── -->
+<div class="page" id="page-strike" style="display:none">
+  <div class="back-row" onclick="closeStrikePicker()">← Назад</div>
+  <div class="wizard-title" id="strikeTitle">Выбор страйка</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:14px" id="strikeSpotLine">—</div>
+
+  <div id="strikeList" style="text-align:center;padding:40px 20px;color:var(--muted)">Загрузка…</div>
+
+  <div class="chk-row" onclick="toggleMarketMode()">
+    <div class="chk-box checked" id="marketChk"></div>
+    <div>Взять по рынку (продать по текущему bid)</div>
+  </div>
+
+  <div class="range-box" id="limitPriceBox" style="display:none;margin-bottom:16px">
+    <label>Цена размещения (лимитный ордер на продажу)</label>
+    <input id="limitPriceInput" type="number" placeholder="0.00">
+  </div>
+
+  <button class="btn-start" style="margin-top:8px" onclick="confirmStrikeStep()">Далее</button>
 </div>
 
 <!-- ── Профиль (заглушка — содержимое не согласовано) ── -->
@@ -1264,7 +1296,7 @@ let gridCountTouched = false;
 let investDriverField = 'orderSize';
 
 function hideAllPages() {
-  ['page-list', 'page-futures-list', 'page-spot-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range', 'page-grid', 'page-invest', 'page-finalize', 'page-strategies', 'page-profile']
+  ['page-list', 'page-futures-list', 'page-spot-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range', 'page-grid', 'page-invest', 'page-finalize', 'page-strategies', 'page-profile', 'page-strike']
     .forEach(id => document.getElementById(id).style.display = 'none');
 }
 
@@ -1350,8 +1382,100 @@ function renderStrategyCard(d, featured) {
   </div>`;
 }
 
+// ── Выбор страйка (шаг после "Активировать" на карточке стратегии) ──────
+let strikeCoin = null;
+let strikeChainCache = null;
+let selectedStrike = null;
+let marketMode = true;
+
 function activateStrategy(coin) {
-  toast('Выбор страйка и запуск — следующий шаг, пока не реализован');
+  openStrikePicker(coin);
+}
+
+async function openStrikePicker(coin) {
+  strikeCoin = coin;
+  marketMode = true;
+  selectedStrike = null;
+  hideAllPages();
+  document.getElementById('page-strike').style.display = 'block';
+  hideBottomNav();
+  document.getElementById('marketChk').classList.add('checked');
+  document.getElementById('limitPriceBox').style.display = 'none';
+  document.getElementById('strikeTitle').textContent = 'Выбор страйка · ' + coin;
+  document.getElementById('strikeSpotLine').textContent = 'Загрузка…';
+  document.getElementById('strikeList').innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted)">Загрузка реальной цепочки опционов…</div>';
+
+  try {
+    const r = await fetch(API_BASE + '/api/option-chain?coin=' + coin);
+    const d = await r.json();
+    if (!r.ok || d.error) { toast('Ошибка: ' + (d.error || 'нет данных')); closeStrikePicker(); return; }
+    strikeChainCache = d;
+    selectedStrike = d.defaultStrike;
+    document.getElementById('strikeSpotLine').textContent =
+      'Спот: ' + d.spotPrice + ' ' + coin + '/USDT · экспирация ' + new Date(d.expiry).toLocaleString('ru-RU') +
+      ' · на споте: ' + d.spotBalance + ' ' + coin;
+    renderStrikeList();
+  } catch (e) {
+    toast('Нет связи с сервером: ' + e.message);
+    closeStrikePicker();
+  }
+}
+
+function renderStrikeList() {
+  const d = strikeChainCache;
+  document.getElementById('strikeList').innerHTML = d.strikes.map(s => {
+    const sel = selectedStrike && selectedStrike.symbol === s.symbol;
+    const liquid = s.bid > 0;
+    return `
+    <div class="strike-row ${sel ? 'selected' : ''}" style="${liquid ? '' : 'opacity:.5'}" onclick="pickStrike('${s.symbol}')">
+      <div>
+        <div class="sr-strike">${s.strike}</div>
+        <div class="sr-mid">
+          <span>IV <b>${s.iv != null ? (s.iv * 100).toFixed(1) + '%' : '—'}</b></span>
+          <span>Bid <b>${s.bid ?? '—'}</b></span>
+          <span>Ask <b>${s.ask ?? '—'}</b></span>
+        </div>
+      </div>
+      ${d.defaultStrike.symbol === s.symbol ? '<div class="sr-badge">по умолч.</div>' : (liquid ? '' : '<div class="sr-badge" style="color:var(--muted);border-color:var(--border)">нет bid</div>')}
+    </div>`;
+  }).join('');
+}
+
+function pickStrike(symbol) {
+  selectedStrike = strikeChainCache.strikes.find(s => s.symbol === symbol);
+  renderStrikeList();
+  if (marketMode) syncLimitPriceFromMarket();
+}
+
+function toggleMarketMode() {
+  marketMode = !marketMode;
+  document.getElementById('marketChk').classList.toggle('checked', marketMode);
+  document.getElementById('limitPriceBox').style.display = marketMode ? 'none' : 'block';
+  if (!marketMode) syncLimitPriceFromMarket();
+}
+
+function syncLimitPriceFromMarket() {
+  if (selectedStrike && selectedStrike.ask != null) {
+    document.getElementById('limitPriceInput').value = selectedStrike.ask;
+  }
+}
+
+function closeStrikePicker() {
+  document.getElementById('page-strike').style.display = 'none';
+  document.getElementById('page-strategies').style.display = 'block';
+  showBottomNav();
+}
+
+function confirmStrikeStep() {
+  if (!selectedStrike) { toast('Выберите страйк'); return; }
+  if (selectedStrike.bid <= 0 && marketMode) { toast('У этого страйка нет заявок на покупку — продать по рынку нельзя, выберите другой или введите свою лимитную цену'); return; }
+  const limitPrice = marketMode ? selectedStrike.bid : parseFloat(document.getElementById('limitPriceInput').value);
+  if (!marketMode && (!limitPrice || limitPrice <= 0)) { toast('Укажите цену размещения'); return; }
+  // Черновик стратегии — объём позиции выбирается на следующем этапе
+  // (по аналогии с настройкой торгового бота), сам ордер здесь ещё не
+  // размещается.
+  window.pendingStrategyDraft = { coin: strikeCoin, symbol: selectedStrike.symbol, strike: selectedStrike.strike, marketMode, limitPrice };
+  toast('Страйк выбран: ' + selectedStrike.symbol + '. Дальше — выбор объёма (следующий этап, пока не реализован)');
 }
 
 document.getElementById('stratTabRow').addEventListener('click', e => {
