@@ -433,6 +433,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
       <div class="pair-coin" style="background:#627eea;font-size:12px">ETH</div>
       <h3>ETH / USDT</h3>
     </div>
+    <div class="pair-row" data-name="sol solana солана" onclick="selectPair('SOLUSDT')">
+      <div class="pair-coin" style="background:#14f195;font-size:12px;color:#052b1f">SOL</div>
+      <h3>SOL / USDT</h3>
+    </div>
+    <div class="pair-row" data-name="xaut tether gold золото" onclick="selectPair('XAUTUSDT')">
+      <div class="pair-coin" style="background:#d4af37;font-size:11px;color:#2b2100">XAUT</div>
+      <h3>XAUT / USDT</h3>
+    </div>
+    <div class="pair-row" data-name="hype hyperliquid" onclick="selectPair('HYPEUSDT')">
+      <div class="pair-coin" style="background:#97fce4;font-size:12px;color:#02332b">HYPE</div>
+      <h3>HYPE / USDT</h3>
+    </div>
   </div>
 </div>
 
@@ -1625,9 +1637,14 @@ function computeImmediateOrders(levels) {
 }
 
 function baseCoinMeta(symbol) {
-  return symbol === 'BTCUSDT'
-    ? { code: 'BTC', icon: '₿', color: '#f7931a', step: 0.001 }
-    : { code: 'ETH', icon: 'Ξ', color: '#627eea', step: 0.01 };
+  const table = {
+    BTCUSDT:  { code: 'BTC',  icon: '₿', color: '#f7931a', step: 0.001 },
+    ETHUSDT:  { code: 'ETH',  icon: 'Ξ', color: '#627eea', step: 0.01 },
+    SOLUSDT:  { code: 'SOL',  icon: '◎', color: '#14f195', step: 0.1 },
+    XAUTUSDT: { code: 'XAUT', icon: 'Au', color: '#d4af37', step: 0.001 },
+    HYPEUSDT: { code: 'HYPE', icon: 'H', color: '#97fce4', step: 0.01 },
+  };
+  return table[symbol] || table.ETHUSDT;
 }
 
 /** Заходим на шаг 3 — настраиваем чипы под выбранный на шаге 1 символ,
