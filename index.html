@@ -36,8 +36,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .bot-info p{font-size:12px;color:var(--muted)}
 .chev{color:var(--muted);font-size:18px}
 
-.fab{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:56px;height:56px;border-radius:50%;background:var(--accent2);border:none;color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(124,92,255,.4);cursor:pointer;z-index:150}
-.fab-label{position:fixed;bottom:6px;left:50%;transform:translateX(-50%);font-size:10px;font-family:var(--mono);color:var(--muted);z-index:150}
+.fab{position:relative;top:-20px;width:56px;height:56px;border-radius:50%;background:var(--accent2);border:none;color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(124,92,255,.4);cursor:pointer;z-index:150;flex-shrink:0}
+
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;height:60px;background:rgba(10,10,12,.97);backdrop-filter:blur(14px);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;z-index:140;padding-bottom:env(safe-area-inset-bottom)}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:10px;font-family:var(--mono);cursor:pointer;position:relative;flex:1;height:100%;justify-content:center}
+.nav-item .nav-icon{font-size:19px;line-height:1}
+.nav-item.active{color:var(--accent2)}
+.nav-item.locked{opacity:.5;cursor:default}
+.nav-soon{position:absolute;top:2px;background:var(--accent2);color:#fff;font-size:8px;font-weight:700;padding:1px 6px;border-radius:8px;white-space:nowrap}
 
 .sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:300}
 .sheet-backdrop.show{display:block}
@@ -184,6 +190,22 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .ov-art{position:absolute;right:8px;bottom:44px;width:56px;height:56px;object-fit:contain;border-radius:10px;opacity:.85;pointer-events:none}
 .ov-arrow{position:absolute;right:14px;bottom:14px;width:30px;height:30px;border-radius:50%;background:var(--accent2);color:#fff;border:none;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2}
 .section-title{font-size:13px;color:var(--muted);font-weight:600;margin:18px 2px 10px}
+
+.strat-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;position:relative;overflow:hidden}
+.strat-card.featured{border-color:rgba(255,159,10,.5);background:linear-gradient(135deg, rgba(255,159,10,.14), var(--card) 60%)}
+.strat-badge-day{display:inline-block;background:rgba(255,159,10,.18);color:var(--warn);font-size:10px;font-family:var(--mono);font-weight:700;padding:4px 10px;border-radius:20px;margin-bottom:8px}
+.strat-title{font-size:17px;font-weight:700;margin-bottom:2px}
+.strat-sub{font-size:12px;color:var(--muted);margin-bottom:10px}
+.strat-stats{display:flex;gap:18px;margin-bottom:10px;flex-wrap:wrap}
+.strat-stat-lbl{font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase}
+.strat-stat-val{font-size:14px;font-weight:700;font-family:var(--mono)}
+.strat-stat-val.warn{color:var(--warn)}
+.strat-stat-val.bad{color:var(--red)}
+.strat-coins{display:flex;gap:6px;margin-bottom:12px}
+.strat-coin-chip{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.06);border-radius:10px;padding:3px 8px;font-size:11px;font-family:var(--mono)}
+.strat-activate{background:var(--accent2);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-family:var(--mono);font-size:12px;font-weight:700;cursor:pointer}
+.strat-activate:disabled{background:var(--border);color:var(--muted);cursor:not-allowed}
+.strat-card.featured .strat-activate{background:#fff;color:#000}
 </style>
 </head>
 <body>
@@ -448,6 +470,39 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   </div>
 </div>
 
+<!-- ── Стратегии: список (продажа покрытых call) ── -->
+<div class="page" id="page-strategies" style="display:none">
+  <div class="wizard-title">Стратегии</div>
+
+  <div class="toggle-row" id="stratTabRow">
+    <button class="toggle-pill active" data-tab="recommended">Рекомендуемые</button>
+    <button class="toggle-pill" data-tab="mine">Мои стратегии</button>
+  </div>
+
+  <div class="toggle-row" style="margin-bottom:16px">
+    <button class="toggle-pill" style="flex:1" onclick="toast('Фильтры пока недоступны')">☰ Фильтры</button>
+    <button class="toggle-pill" style="flex:1" onclick="toast('Сортировка пока недоступна')">⇅ Сортировка</button>
+  </div>
+
+  <div id="stratRecommendedTab">
+    <div id="stratCardsList" style="text-align:center; padding:40px 20px; color:var(--muted)">Загрузка реальных данных с Bybit…</div>
+  </div>
+
+  <div id="stratMineTab" style="display:none; text-align:center; padding:60px 20px; color:var(--muted)">
+    <div style="font-size:48px; margin-bottom:12px">🚀</div>
+    <div>Активных стратегий нет</div>
+  </div>
+</div>
+
+<!-- ── Профиль (заглушка — содержимое не согласовано) ── -->
+<div class="page" id="page-profile" style="display:none">
+  <div class="wizard-title">Профиль</div>
+  <div class="detail-card" style="text-align:center;padding:50px 20px;color:var(--muted)">
+    <div style="font-size:40px;margin-bottom:10px">👤</div>
+    <div>Раздел в разработке</div>
+  </div>
+</div>
+
 <!-- ── Мастер создания: шаг 1 из 4 — график, направление, диапазон ── -->
 <div class="page" id="page-range" style="display:none">
   <div class="back-row" onclick="closeRange()">← Назад</div>
@@ -646,9 +701,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <button class="btn-cta danger" id="nextBtn" onclick="confirmRangeStep()">Создать сейчас</button>
 </div>
 
-<!-- ── "+" Открыть бота ── -->
-<button class="fab" onclick="openSheet()">+</button>
-<div class="fab-label">Открыть бота</div>
+<!-- ── Нижняя навигация ── -->
+<div class="bottom-nav" id="bottomNav">
+  <div class="nav-item locked" onclick="toast('Дашборд появится позже')">
+    <div class="nav-soon">Скоро</div>
+    <div class="nav-icon">📊</div>
+    <div>Дашборд</div>
+  </div>
+  <div class="nav-item" id="navStrategies" onclick="showTab('strategies')">
+    <div class="nav-icon">🚀</div>
+    <div>Стратегии</div>
+  </div>
+  <button class="fab" onclick="openSheet()">+</button>
+  <div class="nav-item active" id="navBots" onclick="showTab('bots')">
+    <div class="nav-icon">🤖</div>
+    <div>Боты</div>
+  </div>
+  <div class="nav-item" id="navProfile" onclick="showTab('profile')">
+    <div class="nav-icon">👤</div>
+    <div>Профиль</div>
+  </div>
+</div>
 
 <div class="sheet-backdrop" id="sheetBackdrop" onclick="closeSheet()"></div>
 <div class="sheet" id="sheet">
@@ -940,10 +1013,12 @@ async function loadArchiveBots() {
 function openFutures() {
   document.getElementById('page-futures-list').style.display = 'none';
   document.getElementById('page-futures').style.display = 'block';
+  hideBottomNav();
 }
 function closeFutures() {
   document.getElementById('page-futures').style.display = 'none';
   document.getElementById('page-futures-list').style.display = 'block';
+  showBottomNav();
 }
 
 let currentBotDetailId = null;
@@ -957,12 +1032,14 @@ async function openBotDetail(id) {
   document.getElementById('bdLogsTab').style.display = 'none';
   document.getElementById('page-futures-list').style.display = 'none';
   document.getElementById('page-bot-detail').style.display = 'block';
+  hideBottomNav();
   await fetchBotDetail();
 }
 function closeBotDetail() {
   currentBotDetailId = null;
   document.getElementById('page-bot-detail').style.display = 'none';
   document.getElementById('page-futures-list').style.display = 'block';
+  showBottomNav();
 }
 
 document.getElementById('bdTabRow').addEventListener('click', e => {
@@ -1187,19 +1264,113 @@ let gridCountTouched = false;
 let investDriverField = 'orderSize';
 
 function hideAllPages() {
-  ['page-list', 'page-futures-list', 'page-spot-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range', 'page-grid', 'page-invest', 'page-finalize']
+  ['page-list', 'page-futures-list', 'page-spot-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range', 'page-grid', 'page-invest', 'page-finalize', 'page-strategies', 'page-profile']
     .forEach(id => document.getElementById(id).style.display = 'none');
 }
+
+/** Нижняя навигация видна на "верхнеуровневых" экранах (Боты/Стратегии/
+ *  Профиль, включая списки фьючерс/спот-ботов — это разворот той же
+ *  вкладки "Боты", а не отдельный полноэкранный флоу), и скрывается на
+ *  полноэкранных: мастер создания, детали конкретного бота. */
+function hideBottomNav() {
+  const el = document.getElementById('bottomNav');
+  if (el) el.style.display = 'none';
+}
+function showBottomNav() {
+  const el = document.getElementById('bottomNav');
+  if (el) el.style.display = 'flex';
+}
+
+function showTab(tab) {
+  hideAllPages();
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  if (tab === 'bots') {
+    document.getElementById('page-list').style.display = 'block';
+    document.getElementById('navBots').classList.add('active');
+  } else if (tab === 'strategies') {
+    document.getElementById('page-strategies').style.display = 'block';
+    document.getElementById('navStrategies').classList.add('active');
+    loadStrategiesList();
+  } else if (tab === 'profile') {
+    document.getElementById('page-profile').style.display = 'block';
+    document.getElementById('navProfile').classList.add('active');
+  }
+  showFab();
+  showBottomNav();
+}
+
+// ── Стратегии: продажа покрытых call ──────────────────────────────────
+// Монеты ограничены теми, у кого реально есть опционы на Bybit (проверено
+// напрямую через /v5/market/instruments-info) — BTC/ETH/SOL/XAUT/HYPE.
+const STRATEGY_COINS = ['ETH', 'SOL', 'BTC', 'XAUT', 'HYPE'];
+let strategiesLoaded = false;
+
+async function loadStrategiesList() {
+  const box = document.getElementById('stratCardsList');
+  box.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted)">Загрузка реальных данных с Bybit…</div>';
+  const results = await Promise.all(STRATEGY_COINS.map(async coin => {
+    try {
+      const r = await fetch(API_BASE + '/api/option-chain?coin=' + coin);
+      const d = await r.json();
+      if (!r.ok || d.error) return { coin, error: d.error || 'ошибка' };
+      return d;
+    } catch (e) {
+      return { coin, error: e.message };
+    }
+  }));
+
+  box.innerHTML = results.map((r, i) => renderStrategyCard(r, i === 0)).join('');
+}
+
+function renderStrategyCard(d, featured) {
+  const meta = baseCoinMeta(d.coin + 'USDT');
+  if (d.error) {
+    return `<div class="strat-card"><div class="strat-title">${d.coin} Covered Call</div><div class="strat-sub" style="color:var(--red)">Нет данных: ${d.error}</div></div>`;
+  }
+  const s = d.defaultStrike;
+  const otmPct = ((s.strike / d.spotPrice - 1) * 100).toFixed(1);
+  const hasBalance = d.spotBalance > 0;
+  const liquidWarn = d.defaultStrikeLiquid ? '' : '<div class="strat-sub" style="color:var(--warn)">⚠ Ни один страйк не имеет реального спроса (bid=0) — рынок по дневному опциону почти пуст</div>';
+  return `
+  <div class="strat-card ${featured ? 'featured' : ''}">
+    ${featured ? '<div class="strat-badge-day">Стратегия дня</div>' : ''}
+    <div class="strat-title">${d.coin} Covered Call</div>
+    <div class="strat-sub">Продажа однодневного колла · страйк ${s.strike} (${otmPct >= 0 ? '+' : ''}${otmPct}% от спота ${d.spotPrice})</div>
+    ${liquidWarn}
+    <div class="strat-stats">
+      <div><div class="strat-stat-lbl">IV</div><div class="strat-stat-val">${(s.iv * 100).toFixed(1)}%</div></div>
+      <div><div class="strat-stat-lbl">Bid / Ask</div><div class="strat-stat-val">${s.bid} / ${s.ask}</div></div>
+      <div><div class="strat-stat-lbl">Актив на споте</div><div class="strat-stat-val ${hasBalance ? '' : 'bad'}">${d.spotBalance} ${d.coin}</div></div>
+    </div>
+    <div class="strat-coins">
+      <div class="strat-coin-chip">${meta.icon} ${d.coin}</div>
+      <div class="strat-coin-chip">💵 USDT</div>
+    </div>
+    <button class="strat-activate" ${hasBalance ? '' : 'disabled'} onclick="activateStrategy('${d.coin}')">${hasBalance ? 'Активировать' : 'Нет актива на споте'}</button>
+  </div>`;
+}
+
+function activateStrategy(coin) {
+  toast('Выбор страйка и запуск — следующий шаг, пока не реализован');
+}
+
+document.getElementById('stratTabRow').addEventListener('click', e => {
+  const btn = e.target.closest('.toggle-pill');
+  if (!btn) return;
+  document.querySelectorAll('#stratTabRow .toggle-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  const tab = btn.dataset.tab;
+  document.getElementById('stratRecommendedTab').style.display = tab === 'recommended' ? 'block' : 'none';
+  document.getElementById('stratMineTab').style.display = tab === 'mine' ? 'block' : 'none';
+});
 
 /** Кнопка "+" открывает мастер создания ещё одного бота — бессмысленна,
  *  пока мы уже ВНУТРИ мастера (выбор пары / шаг 1 / шаг 2 / финал). */
 function hideFab() {
   document.querySelector('.fab').style.display = 'none';
-  document.querySelector('.fab-label').style.display = 'none';
 }
 function showFab() {
   document.querySelector('.fab').style.display = 'flex';
-  document.querySelector('.fab-label').style.display = 'block';
 }
 
 function openPairPicker(botType) {
@@ -1209,10 +1380,12 @@ function openPairPicker(botType) {
   hideAllPages();
   document.getElementById('page-pair').style.display = 'block';
   hideFab();
+  hideBottomNav();
 }
 function closePair() {
   document.getElementById('page-pair').style.display = 'none';
   document.getElementById('page-futures-list').style.display = 'block';
+  showBottomNav();
   // Возврат на список фьючерс-ботов — там уже есть кнопка "Создать +"
   // наверху, плавающий "+" на этом экране остаётся скрытым (см. openFuturesList).
 }
@@ -2170,6 +2343,7 @@ async function confirmRangeStep() {
     toast('✅ Бот создан и запущен: ' + id);
     hideAllPages();
     document.getElementById('page-futures-list').style.display = 'block';
+    showBottomNav();
     // Плавающий "+" здесь остаётся скрытым — на списке фьючерс-ботов уже
     // есть кнопка "Создать +" наверху (см. openFuturesList).
     loadCreatedBots();
