@@ -448,7 +448,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <div class="detail-card" style="margin-top:6px">
     <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px">Управление ботом</div>
     <button class="btn-stop" onclick="stopBotDetail()">■ ОСТАНОВИТЬ БОТА</button>
-    <button class="btn-start" onclick="startBotDetail()">▶ ЗАПУСТИТЬ БОТА</button>
+    <button class="btn-start" onclick="copyBotToWizard()">⧉ Копировать бота</button>
   </div>
 </div>
 
@@ -1211,11 +1211,53 @@ async function fetchBotLog() {
   }
 }
 
-async function startBotDetail() {
+// Намеренно нет прямого "запустить заново" для существующего экземпляра —
+// см. комментарий у удалённого /api/bots/:id/start в server.js. Вместо
+// этого "Копировать бота" переносит параметры в мастер создания: результат
+// всегда новый экземпляр с чистым состоянием, прошедший проверки мастера
+// заново, а не реанимация старого process/state.json вслепую.
+async function copyBotToWizard() {
   if (!currentBotDetailId) return;
-  await fetch(BOTS_API + '/' + currentBotDetailId + '/start', { method: 'POST' });
-  toast('▶ Команда запуска отправлена');
-  fetchBotDetail();
+  let d;
+  try {
+    const r = await fetch(BOTS_API + '/' + currentBotDetailId + '/status');
+    d = await r.json();
+    if (d.error) { toast('❌ Не удалось загрузить параметры бота'); return; }
+  } catch (e) { toast('Нет связи с сервером: ' + e.message); return; }
+
+  wizardBotType = 'futures';
+  wizardSymbol = d.symbol;
+  wizardDirection = d.direction;
+  wizardGridType = d.gridType || 'arithmetic';
+  wizardGridCurvature = d.gridCurvature != null ? d.gridCurvature : 2;
+  wizardMode = 'range';
+  gridCountTouched = true; // значения скопированы явно, авто-пересчёт не нужен
+  investDriverField = 'orderSize';
+
+  hideAllPages();
+  document.getElementById('page-range').style.display = 'block';
+  hideFab();
+  hideBottomNav();
+
+  const title = 'Создание фьючерс бота · ' + d.symbol.replace('USDT', '/USDT');
+  document.getElementById('rangeTitle').textContent = title;
+  document.getElementById('gridTitle').textContent = title;
+  document.getElementById('finalizeTitle').textContent = title;
+
+  document.getElementById('lowerInput').value = d.lowerPrice;
+  document.getElementById('upperInput').value = d.upperPrice;
+  document.getElementById('gridCountInput').value = d.gridCount;
+  document.getElementById('orderSizeInput').value = d.orderSizeEth != null ? d.orderSizeEth : (d.symbol === 'BTCUSDT' ? 0.001 : 0.01);
+  document.getElementById('createStatus').textContent = '';
+  document.querySelectorAll('#dirRow .dir-pill').forEach(p => p.classList.toggle('active', p.dataset.dir === d.direction));
+  document.querySelectorAll('#gridTypeRow .toggle-pill').forEach(p => p.classList.toggle('active', p.dataset.gtype === wizardGridType));
+  document.getElementById('tvWrap1').style.display = 'block';
+  document.getElementById('eyeBtn1').textContent = '👁 Скрыть график';
+  renderChart('tv_chart', d.symbol, w => tvWidget = w);
+  loadWizardFeeRate(d.symbol);
+  wizardLastPrice = d.currentPrice;
+
+  toast('Параметры скопированы — проверьте диапазон и подтвердите создание нового бота');
 }
 /** Клик на "■ ОСТАНОВИТЬ БОТА" больше не останавливает сразу — сначала
  *  спрашиваем, что делать с открытыми ордерами и позицией на бирже (см.
