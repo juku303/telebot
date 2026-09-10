@@ -799,6 +799,19 @@ if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#000000'); tg.setBackgroun
 const API_BASE = 'https://trading-bot-bybit.vorotnet.kz';
 const API = API_BASE + '/api/status';
 const BOTS_API = API_BASE + '/api/bots';
+
+// Реальный инцидент 2026-09-10: API был доступен без авторизации на
+// публичном домене — кто-то (не владелец) удалённо остановил боевого
+// бота через открытый /api/bots/:id/stop. Секрет в заголовке — не для
+// защиты от людей со скриптами (он всё равно лежит в клиентском коде,
+// это не настоящая тайна), а чтобы закрыть именно случай "любой, кто
+// нашёл URL через Certificate Transparency логи, дёргает API вслепую" —
+// такой сканер заголовок не подставит.
+const API_SECRET = '29ce608d702bf7754ec0b961fc260989089c3cf2e95ba4f5e14d030d43853852';
+function apiFetch(url, options = {}) {
+  const headers = Object.assign({}, options.headers, { 'X-Api-Secret': API_SECRET });
+  return fetch(url, Object.assign({}, options, { headers }));
+}
 let lastPayload = null;
 let currentPeriod = '30';
 
@@ -1027,7 +1040,7 @@ async function loadArchiveBots() {
   const list = document.getElementById('archiveList');
   const empty = document.getElementById('archiveEmptyState');
   try {
-    const r = await fetch(BOTS_API);
+    const r = await apiFetch(BOTS_API);
     const bots = (await r.json()).filter(b => !b.running);
     if (bots.length === 0) {
       list.innerHTML = '';
@@ -1100,7 +1113,7 @@ function formatDuration(ms) {
 async function fetchBotDetail() {
   if (!currentBotDetailId) return;
   try {
-    const r = await fetch(BOTS_API + '/' + currentBotDetailId + '/status');
+    const r = await apiFetch(BOTS_API + '/' + currentBotDetailId + '/status');
     const d = await r.json();
     if (d.error) { toast('❌ Бот не найден'); return; }
 
@@ -1202,7 +1215,7 @@ async function fetchBotLog() {
   if (!currentBotDetailId) return;
   const box = document.getElementById('bdLogBox');
   try {
-    const r = await fetch(BOTS_API + '/' + currentBotDetailId + '/log?lines=80');
+    const r = await apiFetch(BOTS_API + '/' + currentBotDetailId + '/log?lines=80');
     const d = await r.json();
     box.textContent = (d.lines && d.lines.length) ? d.lines.join('\n') : 'Лог пока пуст';
     box.scrollTop = box.scrollHeight;
@@ -1220,7 +1233,7 @@ async function copyBotToWizard() {
   if (!currentBotDetailId) return;
   let d;
   try {
-    const r = await fetch(BOTS_API + '/' + currentBotDetailId + '/status');
+    const r = await apiFetch(BOTS_API + '/' + currentBotDetailId + '/status');
     d = await r.json();
     if (d.error) { toast('❌ Не удалось загрузить параметры бота'); return; }
   } catch (e) { toast('Нет связи с сервером: ' + e.message); return; }
@@ -1277,7 +1290,7 @@ async function confirmStop(mode) {
   if (!id) return;
   toast('Останавливаем…');
   try {
-    const r = await fetch(BOTS_API + '/' + id + '/stop', {
+    const r = await apiFetch(BOTS_API + '/' + id + '/stop', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode }),
@@ -1384,7 +1397,7 @@ async function loadStrategiesList() {
   box.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted)">Загрузка реальных данных с Bybit…</div>';
   const results = await Promise.all(STRATEGY_COINS.map(async coin => {
     try {
-      const r = await fetch(API_BASE + '/api/option-chain?coin=' + coin);
+      const r = await apiFetch(API_BASE + '/api/option-chain?coin=' + coin);
       const d = await r.json();
       if (!r.ok || d.error) return { coin, error: d.error || 'ошибка' };
       return d;
@@ -1448,7 +1461,7 @@ async function openStrikePicker(coin) {
   document.getElementById('strikeList').innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted)">Загрузка реальной цепочки опционов…</div>';
 
   try {
-    const r = await fetch(API_BASE + '/api/option-chain?coin=' + coin);
+    const r = await apiFetch(API_BASE + '/api/option-chain?coin=' + coin);
     const d = await r.json();
     if (!r.ok || d.error) { toast('Ошибка: ' + (d.error || 'нет данных')); closeStrikePicker(); return; }
     strikeChainCache = d;
@@ -1579,7 +1592,7 @@ async function loadWizardFeeRate(symbol) {
   wizardFeeRatePct = null;
   wizardFeeRateSource = 'default';
   try {
-    const r = await fetch(API_BASE + '/api/fee-rate?symbol=' + symbol);
+    const r = await apiFetch(API_BASE + '/api/fee-rate?symbol=' + symbol);
     const d = await r.json();
     if (d.takerFeeRatePct != null) {
       wizardFeeRatePct = d.takerFeeRatePct;
@@ -1621,7 +1634,7 @@ function selectPair(symbol) {
  *  пользователь не начал вводить границы вручную. */
 async function loadDefaultRange(symbol) {
   try {
-    const r = await fetch(API_BASE + '/api/price?symbol=' + symbol);
+    const r = await apiFetch(API_BASE + '/api/price?symbol=' + symbol);
     const d = await r.json();
     if (d.price == null) return;
     wizardLastPrice = d.price;
@@ -2007,14 +2020,14 @@ function setupInvestStep() {
   document.getElementById('investIcon').style.background = '#26a17b';
 
   wizardLastPrice = null;
-  fetch(API_BASE + '/api/price?symbol=' + wizardSymbol)
+  apiFetch(API_BASE + '/api/price?symbol=' + wizardSymbol)
     .then(r => r.json())
     .then(d => { if (d.price != null) wizardLastPrice = d.price; renderInvestStats(); })
     .catch(() => {});
 
   const balEl = document.getElementById('availableBalanceVal');
   balEl.textContent = 'загрузка…';
-  fetch(API_BASE + '/api/available-balance')
+  apiFetch(API_BASE + '/api/available-balance')
     .then(r => r.json())
     .then(d => { balEl.textContent = d.available != null ? '$' + d.available.toFixed(2) : '—'; })
     .catch(() => { balEl.textContent = '—'; });
@@ -2022,7 +2035,7 @@ function setupInvestStep() {
   wizardMinOrderQty = null;
   wizardMinNotional = null;
   wizardQtyStep = null;
-  fetch(API_BASE + '/api/instrument-info?symbol=' + wizardSymbol)
+  apiFetch(API_BASE + '/api/instrument-info?symbol=' + wizardSymbol)
     .then(r => r.json())
     .then(d => {
       if (d.minOrderQty != null) wizardMinOrderQty = d.minOrderQty;
@@ -2492,7 +2505,7 @@ async function confirmRangeStep() {
   statusEl.textContent = 'Создаём…';
 
   try {
-    const r = await fetch(BOTS_API, {
+    const r = await apiFetch(BOTS_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2533,7 +2546,7 @@ async function confirmRangeStep() {
 async function loadCreatedBots() {
   const container = document.getElementById('createdBotsList');
   try {
-    const r = await fetch(BOTS_API + '?days=' + currentPeriod);
+    const r = await apiFetch(BOTS_API + '?days=' + currentPeriod);
     const bots = await r.json();
     // В "Активные" попадают только реально работающие — остановленные того
     // же реестра показываются в "Архив" (loadArchiveBots), не одновременно
@@ -2592,7 +2605,7 @@ function startBot() {
 
 async function fetchStatus() {
   try {
-    const r = await fetch(API + '?days=' + currentPeriod);
+    const r = await apiFetch(API + '?days=' + currentPeriod);
     const d = await r.json();
     lastPayload = d;
     const badge = document.getElementById('liveBadge');
