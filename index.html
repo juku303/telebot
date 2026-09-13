@@ -1448,7 +1448,14 @@ function renderStrategyCard(d, featured) {
   // +0.2% сверху недостачи — запас на комиссию биржи при покупке (та самая
   // причина, по которой купленные "ровно 0.1" стали 0.0999 и снова не
   // хватило); без запаса докупка тем же способом снова упёрлась бы в минимум.
-  const shortfall = hasBalance ? 0 : (d.minOrderQty - d.spotBalance) * 1.002;
+  // Отдельно — у спот-ордера свой минимум по СУММЕ (minOrderAmt, сейчас 5
+  // USDT), не связанный с minOrderQty опциона: докупка на пару центов
+  // технически валидна по qty, но биржа всё равно отклонит ордер меньше
+  // 5 USDT ("Order value exceeded lower limit" — реальная ошибка, с которой
+  // столкнулись). Предлагаем большее из двух минимумов.
+  const qtyShortfall = hasBalance ? 0 : (d.minOrderQty - d.spotBalance) * 1.002;
+  const minBySpotAmt = d.spotMinOrderAmt / d.spotPrice;
+  const shortfall = hasBalance ? 0 : Math.max(qtyShortfall, minBySpotAmt);
   const liquidWarn = d.defaultStrikeLiquid ? '' : '<div class="strat-sub" style="color:var(--warn)">⚠ Ни один страйк не имеет реального спроса (bid=0) — рынок по дневному опциону почти пуст</div>';
   return `
   <div class="strat-card ${featured ? 'featured' : ''}">
