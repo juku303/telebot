@@ -1440,7 +1440,15 @@ function renderStrategyCard(d, featured) {
   }
   const s = d.defaultStrike;
   const otmPct = ((s.strike / d.spotPrice - 1) * 100).toFixed(1);
-  const hasBalance = d.spotBalance > 0;
+  // Не просто "баланс > 0" — биржа не примет ордер на продажу колла мельче
+  // minOrderQty (для ETH сейчас 0.1). Баланс вроде 0.0999 (после комиссии
+  // при покупке актива) формально "больше нуля", но продать колл с ним
+  // нельзя — только так и всплывает эта проверка на практике.
+  const hasBalance = d.spotBalance >= d.minOrderQty;
+  // +0.2% сверху недостачи — запас на комиссию биржи при покупке (та самая
+  // причина, по которой купленные "ровно 0.1" стали 0.0999 и снова не
+  // хватило); без запаса докупка тем же способом снова упёрлась бы в минимум.
+  const shortfall = hasBalance ? 0 : (d.minOrderQty - d.spotBalance) * 1.002;
   const liquidWarn = d.defaultStrikeLiquid ? '' : '<div class="strat-sub" style="color:var(--warn)">⚠ Ни один страйк не имеет реального спроса (bid=0) — рынок по дневному опциону почти пуст</div>';
   return `
   <div class="strat-card ${featured ? 'featured' : ''}">
@@ -1457,7 +1465,7 @@ function renderStrategyCard(d, featured) {
       <div class="strat-coin-chip">${meta.icon} ${d.coin}</div>
       <div class="strat-coin-chip">💵 USDT</div>
     </div>
-    <button class="strat-activate" onclick="${hasBalance ? `activateStrategy('${d.coin}')` : `openBuyAsset('${d.coin}', ${d.spotPrice})`}">${hasBalance ? 'Активировать' : 'Купить актив отложенным ордером'}</button>
+    <button class="strat-activate" onclick="${hasBalance ? `activateStrategy('${d.coin}')` : `openBuyAsset('${d.coin}', ${d.spotPrice}, ${shortfall})`}">${hasBalance ? 'Активировать' : `Купить ещё ${shortfall.toFixed(5)} ${d.coin} (минимум ${d.minOrderQty})`}</button>
   </div>`;
 }
 
@@ -1562,7 +1570,7 @@ let buyAssetCoin = null;
 let buyAssetSpotPrice = null;
 let buyMarketMode = true;
 
-function openBuyAsset(coin, spotPrice) {
+function openBuyAsset(coin, spotPrice, suggestedQty) {
   buyAssetCoin = coin;
   buyAssetSpotPrice = spotPrice;
   buyMarketMode = true;
@@ -1573,7 +1581,10 @@ function openBuyAsset(coin, spotPrice) {
   document.getElementById('buyLimitPriceBox').style.display = 'none';
   document.getElementById('buyAssetTitle').textContent = 'Купить ' + coin;
   document.getElementById('buyAssetSpotLine').textContent = 'Спот: ' + spotPrice + ' ' + coin + '/USDT';
-  document.getElementById('buyAssetQtyInput').value = '1';
+  // Предлагаем ровно недостающее количество (см. renderStrategyCard) — не
+  // круглую "1", чтобы после покупки сразу хватало на минимальный ордер по
+  // опциону, а не так же не хватало, как в прошлый раз с 0.0999 из 0.1.
+  document.getElementById('buyAssetQtyInput').value = suggestedQty > 0 ? suggestedQty.toFixed(5) : '1';
   document.getElementById('buyLimitPriceInput').value = spotPrice;
 }
 
