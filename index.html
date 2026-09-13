@@ -526,6 +526,30 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <button class="btn-start" style="margin-top:8px" onclick="confirmStrikeStep()">Далее</button>
 </div>
 
+<!-- ── Покупка базового актива отложенным ордером (с карточки стратегии, когда "Нет актива на споте") ── -->
+<div class="page" id="page-buy-asset" style="display:none">
+  <div class="back-row" onclick="closeBuyAsset()">← Назад</div>
+  <div class="wizard-title" id="buyAssetTitle">Купить актив</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:14px" id="buyAssetSpotLine">—</div>
+
+  <div class="range-box" style="margin-bottom:16px">
+    <label>Количество</label>
+    <input id="buyAssetQtyInput" type="number" placeholder="1">
+  </div>
+
+  <div class="chk-row" onclick="toggleBuyMarketMode()">
+    <div class="chk-box checked" id="buyMarketChk"></div>
+    <div>Взять по рынку (купить по текущей цене)</div>
+  </div>
+
+  <div class="range-box" id="buyLimitPriceBox" style="display:none;margin-bottom:16px">
+    <label>Цена размещения (лимитный ордер на покупку)</label>
+    <input id="buyLimitPriceInput" type="number" placeholder="0.00">
+  </div>
+
+  <button class="btn-start" style="margin-top:8px" onclick="confirmBuyAsset()">Разместить отложенный ордер</button>
+</div>
+
 <!-- ── Профиль (заглушка — содержимое не согласовано) ── -->
 <div class="page" id="page-profile" style="display:none">
   <div class="wizard-title">Профиль</div>
@@ -1351,7 +1375,7 @@ let gridCountTouched = false;
 let investDriverField = 'orderSize';
 
 function hideAllPages() {
-  ['page-list', 'page-futures-list', 'page-spot-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range', 'page-grid', 'page-invest', 'page-finalize', 'page-strategies', 'page-profile', 'page-strike']
+  ['page-list', 'page-futures-list', 'page-spot-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range', 'page-grid', 'page-invest', 'page-finalize', 'page-strategies', 'page-profile', 'page-strike', 'page-buy-asset']
     .forEach(id => document.getElementById(id).style.display = 'none');
 }
 
@@ -1433,7 +1457,7 @@ function renderStrategyCard(d, featured) {
       <div class="strat-coin-chip">${meta.icon} ${d.coin}</div>
       <div class="strat-coin-chip">💵 USDT</div>
     </div>
-    <button class="strat-activate" ${hasBalance ? '' : 'disabled'} onclick="activateStrategy('${d.coin}')">${hasBalance ? 'Активировать' : 'Нет актива на споте'}</button>
+    <button class="strat-activate" onclick="${hasBalance ? `activateStrategy('${d.coin}')` : `openBuyAsset('${d.coin}', ${d.spotPrice})`}">${hasBalance ? 'Активировать' : 'Купить актив отложенным ордером'}</button>
   </div>`;
 }
 
@@ -1531,6 +1555,60 @@ function confirmStrikeStep() {
   // размещается.
   window.pendingStrategyDraft = { coin: strikeCoin, symbol: selectedStrike.symbol, strike: selectedStrike.strike, marketMode, limitPrice };
   toast('Страйк выбран: ' + selectedStrike.symbol + '. Дальше — выбор объёма (следующий этап, пока не реализован)');
+}
+
+// ── Покупка базового актива отложенным ордером (когда "Нет актива на споте") ──
+let buyAssetCoin = null;
+let buyAssetSpotPrice = null;
+let buyMarketMode = true;
+
+function openBuyAsset(coin, spotPrice) {
+  buyAssetCoin = coin;
+  buyAssetSpotPrice = spotPrice;
+  buyMarketMode = true;
+  hideAllPages();
+  document.getElementById('page-buy-asset').style.display = 'block';
+  hideBottomNav();
+  document.getElementById('buyMarketChk').classList.add('checked');
+  document.getElementById('buyLimitPriceBox').style.display = 'none';
+  document.getElementById('buyAssetTitle').textContent = 'Купить ' + coin;
+  document.getElementById('buyAssetSpotLine').textContent = 'Спот: ' + spotPrice + ' ' + coin + '/USDT';
+  document.getElementById('buyAssetQtyInput').value = '1';
+  document.getElementById('buyLimitPriceInput').value = spotPrice;
+}
+
+function toggleBuyMarketMode() {
+  buyMarketMode = !buyMarketMode;
+  document.getElementById('buyMarketChk').classList.toggle('checked', buyMarketMode);
+  document.getElementById('buyLimitPriceBox').style.display = buyMarketMode ? 'none' : 'block';
+}
+
+function closeBuyAsset() {
+  document.getElementById('page-buy-asset').style.display = 'none';
+  document.getElementById('page-strategies').style.display = 'block';
+  showBottomNav();
+}
+
+async function confirmBuyAsset() {
+  const qty = parseFloat(document.getElementById('buyAssetQtyInput').value);
+  if (!qty || qty <= 0) { toast('Укажите количество'); return; }
+  const price = buyMarketMode ? buyAssetSpotPrice : parseFloat(document.getElementById('buyLimitPriceInput').value);
+  if (!price || price <= 0) { toast('Укажите цену размещения'); return; }
+
+  try {
+    const r = await apiFetch(API_BASE + '/api/spot-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coin: buyAssetCoin, qty, price }),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) { toast('Ошибка: ' + (d.message || d.error || 'не удалось разместить ордер')); return; }
+    toast('Ордер на покупку ' + qty + ' ' + buyAssetCoin + ' по ' + price + ' размещён');
+    closeBuyAsset();
+    loadStrategiesList();
+  } catch (e) {
+    toast('Нет связи с сервером: ' + e.message);
+  }
 }
 
 document.getElementById('stratTabRow').addEventListener('click', e => {
