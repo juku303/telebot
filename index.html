@@ -544,7 +544,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
   <div class="range-box" id="buyLimitPriceBox" style="display:none;margin-bottom:16px">
     <label>Цена размещения (лимитный ордер на покупку)</label>
-    <input id="buyLimitPriceInput" type="number" placeholder="0.00">
+    <input id="buyLimitPriceInput" type="number" placeholder="0.00" oninput="buyLimitPriceTouched = true">
   </div>
 
   <button class="btn-start" style="margin-top:8px" onclick="confirmBuyAsset()">Разместить отложенный ордер</button>
@@ -1576,11 +1576,17 @@ function confirmStrikeStep() {
 let buyAssetCoin = null;
 let buyAssetSpotPrice = null;
 let buyMarketMode = true;
+let buyAssetPriceTimer = null;
+// Ручной ввод цены пользователем не должен затираться живым обновлением —
+// как только человек сам тронул поле, автоподстановку выключаем и только
+// обновляем строку "Спот" для ориентира.
+let buyLimitPriceTouched = false;
 
 function openBuyAsset(coin, spotPrice, suggestedQty) {
   buyAssetCoin = coin;
   buyAssetSpotPrice = spotPrice;
   buyMarketMode = true;
+  buyLimitPriceTouched = false;
   hideAllPages();
   document.getElementById('page-buy-asset').style.display = 'block';
   hideBottomNav();
@@ -1593,6 +1599,28 @@ function openBuyAsset(coin, spotPrice, suggestedQty) {
   // опциону, а не так же не хватало, как в прошлый раз с 0.0999 из 0.1.
   document.getElementById('buyAssetQtyInput').value = suggestedQty > 0 ? suggestedQty.toFixed(5) : '1';
   document.getElementById('buyLimitPriceInput').value = spotPrice;
+
+  // Цена при открытии экрана — статичный снимок, при резком движении рынка
+  // за несколько секунд успевает устареть, и ордер выставляется мимо рынка
+  // ("не могу поймать ордер" — реальная жалоба). Обновляем котировку живьём,
+  // пока экран открыт.
+  if (buyAssetPriceTimer) clearInterval(buyAssetPriceTimer);
+  buyAssetPriceTimer = setInterval(refreshBuyAssetPrice, 1500);
+}
+
+async function refreshBuyAssetPrice() {
+  if (!buyAssetCoin) return;
+  try {
+    const r = await apiFetch(API_BASE + '/api/price?symbol=' + buyAssetCoin + 'USDT');
+    const d = await r.json();
+    if (!r.ok || !d.price) return;
+    buyAssetSpotPrice = d.price;
+    document.getElementById('buyAssetSpotLine').textContent = 'Спот: ' + d.price + ' ' + buyAssetCoin + '/USDT';
+    // В режиме "по рынку" ещё и саму цену покупки держим свежей — иначе
+    // "рыночная" кнопка бьёт по цене на момент открытия экрана, а не по
+    // реальной текущей, что и есть исходная жалоба.
+    if (!buyLimitPriceTouched) document.getElementById('buyLimitPriceInput').value = d.price;
+  } catch (e) { /* тихо — следующий тик попробует снова */ }
 }
 
 function toggleBuyMarketMode() {
@@ -1605,6 +1633,7 @@ function closeBuyAsset() {
   document.getElementById('page-buy-asset').style.display = 'none';
   document.getElementById('page-strategies').style.display = 'block';
   showBottomNav();
+  if (buyAssetPriceTimer) { clearInterval(buyAssetPriceTimer); buyAssetPriceTimer = null; }
 }
 
 async function confirmBuyAsset() {
