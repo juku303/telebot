@@ -550,6 +550,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <button class="btn-start" style="margin-top:8px" onclick="confirmBuyAsset()">Разместить отложенный ордер</button>
 </div>
 
+<!-- ── Дашборд: график волатильности (IV) по BTC/ETH + пороги алертов ── -->
+<div class="page" id="page-dashboard" style="display:none">
+  <div class="wizard-title">Дашборд</div>
+
+  <div class="detail-card">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:4px">Волатильность (IV), ближайшая экспирация</div>
+    <div id="ivHeadline" style="font-size:12px;color:var(--muted);margin-bottom:10px">Загрузка…</div>
+    <svg id="ivChartSvg" viewBox="0 0 340 170" style="width:100%;height:auto;display:block;touch-action:none"></svg>
+    <div id="ivTooltip" style="display:none;position:absolute;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11px;font-family:var(--mono);pointer-events:none;white-space:nowrap;z-index:10"></div>
+    <div id="ivLegend" style="display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--text)"></div>
+  </div>
+
+  <div class="detail-card">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Уведомлять, когда IV входит в зону низкой волатильности</div>
+    <div id="ivThresholdRows"></div>
+  </div>
+</div>
+
 <!-- ── Профиль (заглушка — содержимое не согласовано) ── -->
 <div class="page" id="page-profile" style="display:none">
   <div class="wizard-title">Профиль</div>
@@ -759,8 +777,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 <!-- ── Нижняя навигация ── -->
 <div class="bottom-nav" id="bottomNav">
-  <div class="nav-item locked" onclick="toast('Дашборд появится позже')">
-    <div class="nav-soon">Скоро</div>
+  <div class="nav-item" id="navDashboard" onclick="showTab('dashboard')">
     <div class="nav-icon">📊</div>
     <div>Дашборд</div>
   </div>
@@ -1375,7 +1392,7 @@ let gridCountTouched = false;
 let investDriverField = 'orderSize';
 
 function hideAllPages() {
-  ['page-list', 'page-futures-list', 'page-spot-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range', 'page-grid', 'page-invest', 'page-finalize', 'page-strategies', 'page-profile', 'page-strike', 'page-buy-asset']
+  ['page-list', 'page-futures-list', 'page-spot-list', 'page-futures', 'page-bot-detail', 'page-pair', 'page-range', 'page-grid', 'page-invest', 'page-finalize', 'page-strategies', 'page-profile', 'page-strike', 'page-buy-asset', 'page-dashboard']
     .forEach(id => document.getElementById(id).style.display = 'none');
 }
 
@@ -1405,6 +1422,10 @@ function showTab(tab) {
   } else if (tab === 'profile') {
     document.getElementById('page-profile').style.display = 'block';
     document.getElementById('navProfile').classList.add('active');
+  } else if (tab === 'dashboard') {
+    document.getElementById('page-dashboard').style.display = 'block';
+    document.getElementById('navDashboard').classList.add('active');
+    loadDashboard();
   }
   showFab();
   showBottomNav();
@@ -2777,6 +2798,198 @@ function toast(m) {
   const t = document.getElementById('toast');
   t.textContent = m; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Дашборд: график волатильности (IV) BTC/ETH + пороги алертов ─────────
+// Цвета серий — фиксированный категориальный порядок (blue/orange из
+// валидированной палитры, проверено validate_palette.js на поверхности
+// --card этого приложения: обе проверки CVD/контраста проходят), не
+// подобраны на глаз. BTC всегда первый слот, ETH — второй, порядок не
+// меняется в зависимости от того, чьё значение выше (color follows the
+// entity, not its rank).
+const DASHBOARD_COINS = [
+  { coin: 'BTC', color: '#3987e5' },
+  { coin: 'ETH', color: '#d95926' },
+];
+let ivChartData = {}; // coin -> [{ts, iv, spot}]
+
+async function loadDashboard() {
+  document.getElementById('ivHeadline').textContent = 'Загрузка…';
+  const [btcRes, ethRes, settingsRes] = await Promise.all([
+    apiFetch(API_BASE + '/api/iv-history?coin=BTC&hours=48').then(r => r.json()).catch(() => ({ points: [] })),
+    apiFetch(API_BASE + '/api/iv-history?coin=ETH&hours=48').then(r => r.json()).catch(() => ({ points: [] })),
+    apiFetch(API_BASE + '/api/iv-alert-settings').then(r => r.json()).catch(() => ({})),
+  ]);
+  ivChartData = { BTC: btcRes.points || [], ETH: ethRes.points || [] };
+
+  const latestBtc = ivChartData.BTC[ivChartData.BTC.length - 1];
+  const latestEth = ivChartData.ETH[ivChartData.ETH.length - 1];
+  const parts = [];
+  if (latestBtc) parts.push('BTC ' + (latestBtc.iv * 100).toFixed(1) + '%');
+  if (latestEth) parts.push('ETH ' + (latestEth.iv * 100).toFixed(1) + '%');
+  document.getElementById('ivHeadline').textContent = parts.length ? 'Сейчас: ' + parts.join(' · ') : 'Нет данных пока — iv-logger ещё копит историю';
+
+  renderIvChart();
+  renderIvLegend();
+  renderIvThresholdRows(settingsRes || {});
+}
+
+function renderIvLegend() {
+  const box = document.getElementById('ivLegend');
+  box.innerHTML = DASHBOARD_COINS.map(({ coin, color }) => `
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block"></span>
+      <span>${coin}</span>
+    </div>`).join('');
+}
+
+function renderIvChart() {
+  const svg = document.getElementById('ivChartSvg');
+  const series = DASHBOARD_COINS
+    .map(s => ({ ...s, points: (ivChartData[s.coin] || []).filter(p => p.iv != null) }))
+    .filter(s => s.points.length > 1);
+
+  if (series.length === 0) {
+    svg.innerHTML = `<text x="170" y="85" text-anchor="middle" fill="var(--muted)" font-size="11">Недостаточно данных для графика</text>`;
+    return;
+  }
+
+  const x0 = 30, x1 = 334, y0 = 8, y1 = 138;
+  const allTs = series.flatMap(s => s.points.map(p => p.ts));
+  const allIv = series.flatMap(s => s.points.map(p => p.iv * 100));
+  const tMin = Math.min(...allTs), tMax = Math.max(...allTs);
+  const vMax = Math.max(...allIv) * 1.15;
+  const vMin = 0;
+
+  const xFor = ts => x0 + (x1 - x0) * (tMax === tMin ? 0.5 : (ts - tMin) / (tMax - tMin));
+  const yFor = iv => y1 - (y1 - y0) * ((iv - vMin) / (vMax - vMin || 1));
+
+  // Сетка — рецессивная (приглушённый цвет, тонкая линия), 3 горизонтальные линии
+  let gridSvg = '';
+  const gridSteps = 3;
+  for (let i = 0; i <= gridSteps; i++) {
+    const v = vMax * i / gridSteps;
+    const y = yFor(v);
+    gridSvg += `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="var(--border)" stroke-width="1"/>`;
+    gridSvg += `<text x="${x0 - 6}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-size="9" font-family="var(--mono)">${v.toFixed(0)}%</text>`;
+  }
+
+  // Ось X — подписи начала/конца диапазона
+  const fmt = ts => new Date(ts).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const xAxisSvg = `
+    <text x="${x0}" y="155" text-anchor="start" fill="var(--muted)" font-size="9" font-family="var(--mono)">${fmt(tMin)}</text>
+    <text x="${x1}" y="155" text-anchor="end" fill="var(--muted)" font-size="9" font-family="var(--mono)">${fmt(tMax)}</text>`;
+
+  // Линии серий — 2px, скруглённые концы/стыки, без заливки
+  let linesSvg = '';
+  series.forEach(s => {
+    const d = s.points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xFor(p.ts).toFixed(1)} ${yFor(p.iv * 100).toFixed(1)}`).join(' ');
+    linesSvg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  });
+
+  svg.innerHTML = gridSvg + xAxisSvg + linesSvg +
+    `<line id="ivCrosshair" x1="0" y1="${y0}" x2="0" y2="${y1}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3,3" style="display:none"/>` +
+    series.map(s => `<circle id="ivDot-${s.coin}" r="4" fill="${s.color}" style="display:none"/>`).join('');
+
+  attachIvHover(svg, series, x0, x1, xFor);
+}
+
+function attachIvHover(svg, series, x0, x1, xFor) {
+  const tooltip = document.getElementById('ivTooltip');
+  const crosshair = document.getElementById('ivCrosshair');
+
+  function findNearest(points, targetTs) {
+    let best = points[0], bestDiff = Infinity;
+    for (const p of points) {
+      const diff = Math.abs(p.ts - targetTs);
+      if (diff < bestDiff) { bestDiff = diff; best = p; }
+    }
+    return best;
+  }
+
+  function onMove(evt) {
+    const rect = svg.getBoundingClientRect();
+    const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+    const svgX = ((clientX - rect.left) / rect.width) * 340;
+    if (svgX < x0 || svgX > x1) { hideHover(); return; }
+
+    // Приблизительное время под курсором — по первой серии с данными
+    const ref = series[0].points;
+    const tMin = ref[0].ts, tMax = ref[ref.length - 1].ts;
+    const targetTs = tMin + (tMax - tMin) * ((svgX - x0) / (x1 - x0));
+
+    crosshair.setAttribute('x1', svgX);
+    crosshair.setAttribute('x2', svgX);
+    crosshair.style.display = 'block';
+
+    const lines = [];
+    series.forEach(s => {
+      const nearest = findNearest(s.points, targetTs);
+      const dot = document.getElementById('ivDot-' + s.coin);
+      dot.setAttribute('cx', xFor(nearest.ts));
+      dot.setAttribute('cy', (138 - (138 - 8) * (nearest.iv * 100) / (Math.max(...ref.map(p => p.iv * 100)) * 1.15 || 1)).toFixed(1));
+      dot.style.display = 'block';
+      lines.push(`${s.coin}: ${(nearest.iv * 100).toFixed(1)}%`);
+      if (!lines._ts) lines._ts = new Date(nearest.ts).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    });
+
+    tooltip.innerHTML = lines._ts + '<br>' + lines.join(' · ');
+    tooltip.style.display = 'block';
+    tooltip.style.left = Math.min(rect.width - 120, Math.max(0, (svgX / 340) * rect.width - 40)) + 'px';
+    tooltip.style.top = '-8px';
+  }
+
+  function hideHover() {
+    crosshair.style.display = 'none';
+    series.forEach(s => { const d = document.getElementById('ivDot-' + s.coin); if (d) d.style.display = 'none'; });
+    tooltip.style.display = 'none';
+  }
+
+  svg.parentElement.style.position = 'relative';
+  svg.onpointermove = onMove;
+  svg.onpointerleave = hideHover;
+  svg.ontouchmove = e => { onMove(e); e.preventDefault(); };
+  svg.ontouchend = hideHover;
+}
+
+function renderIvThresholdRows(settings) {
+  const box = document.getElementById('ivThresholdRows');
+  box.innerHTML = DASHBOARD_COINS.map(({ coin, color }) => {
+    const cfg = settings[coin];
+    const points = ivChartData[coin] || [];
+    const latest = points[points.length - 1];
+    const currentIv = latest ? (latest.iv * 100).toFixed(1) : '—';
+    const isBelow = cfg && cfg.lowThreshold != null && latest && latest.iv * 100 < cfg.lowThreshold;
+    return `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
+      <span style="width:36px;font-size:13px">${coin}</span>
+      <span style="font-size:12px;color:var(--muted);width:52px">${currentIv}%</span>
+      <input id="ivThreshold-${coin}" type="number" placeholder="порог %" value="${cfg && cfg.lowThreshold != null ? cfg.lowThreshold : ''}"
+        style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px">
+      <button onclick="saveIvThreshold('${coin}')" style="background:var(--accent2);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer">✓</button>
+      ${isBelow ? `<span style="color:var(--red);font-size:11px;font-family:var(--mono)">ниже</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function saveIvThreshold(coin) {
+  const input = document.getElementById('ivThreshold-' + coin);
+  const raw = input.value.trim();
+  const lowThreshold = raw === '' ? null : parseFloat(raw);
+  try {
+    const r = await apiFetch(API_BASE + '/api/iv-alert-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coin, lowThreshold }),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) { toast('Ошибка: ' + (d.message || d.error)); return; }
+    toast(lowThreshold === null ? `Порог для ${coin} отключён` : `Порог для ${coin} сохранён: ${lowThreshold}%`);
+    loadDashboard();
+  } catch (e) {
+    toast('Нет связи с сервером: ' + e.message);
+  }
 }
 
 fetchStatus();
