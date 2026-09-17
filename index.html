@@ -555,7 +555,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <div class="wizard-title">Дашборд</div>
 
   <div class="detail-card">
-    <div style="font-size:13px;color:var(--muted);margin-bottom:4px">Волатильность (IV), ближайшая экспирация</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Волатильность (IV) по сроку экспирации</div>
+    <div class="toggle-row" id="ivTenorRow" style="margin-bottom:10px">
+      <button class="toggle-pill active" data-tenor="weekly">Неделя</button>
+      <button class="toggle-pill" data-tenor="monthly">Месяц</button>
+      <button class="toggle-pill" data-tenor="quarterly">Квартал</button>
+    </div>
     <div id="ivHeadline" style="font-size:12px;color:var(--muted);margin-bottom:10px">Загрузка…</div>
     <svg id="ivChartSvg" viewBox="0 0 340 170" style="width:100%;height:auto;display:block;touch-action:none"></svg>
     <div id="ivTooltip" style="display:none;position:absolute;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11px;font-family:var(--mono);pointer-events:none;white-space:nowrap;z-index:10"></div>
@@ -2813,11 +2818,19 @@ const DASHBOARD_COINS = [
 ];
 let ivChartData = {}; // coin -> [{ts, iv, spot}]
 
+// Горизонт по умолчанию — недельный. Смена сравнивает IV именно того
+// срока, который собираетесь торговать — "ближайшая экспирация" (как было
+// раньше) вводила в заблуждение: у дальней (например, квартальной)
+// позиции IV почти не шевелится вокруг разовых событий вроде решения по
+// ставке, а недельная в это же время может скакать в разы — сравнение
+// "ожидали по одной, держим другую" уже приводило к неверным ожиданиям.
+let ivSelectedTenor = 'weekly';
+
 async function loadDashboard() {
   document.getElementById('ivHeadline').textContent = 'Загрузка…';
   const [btcRes, ethRes, settingsRes] = await Promise.all([
-    apiFetch(API_BASE + '/api/iv-history?coin=BTC&hours=48').then(r => r.json()).catch(() => ({ points: [] })),
-    apiFetch(API_BASE + '/api/iv-history?coin=ETH&hours=48').then(r => r.json()).catch(() => ({ points: [] })),
+    apiFetch(API_BASE + '/api/iv-history?coin=BTC&hours=168&tenor=' + ivSelectedTenor).then(r => r.json()).catch(() => ({ points: [] })),
+    apiFetch(API_BASE + '/api/iv-history?coin=ETH&hours=168&tenor=' + ivSelectedTenor).then(r => r.json()).catch(() => ({ points: [] })),
     apiFetch(API_BASE + '/api/iv-alert-settings').then(r => r.json()).catch(() => ({})),
   ]);
   ivChartData = { BTC: btcRes.points || [], ETH: ethRes.points || [] };
@@ -2825,14 +2838,23 @@ async function loadDashboard() {
   const latestBtc = ivChartData.BTC[ivChartData.BTC.length - 1];
   const latestEth = ivChartData.ETH[ivChartData.ETH.length - 1];
   const parts = [];
-  if (latestBtc) parts.push('BTC ' + (latestBtc.iv * 100).toFixed(1) + '%');
-  if (latestEth) parts.push('ETH ' + (latestEth.iv * 100).toFixed(1) + '%');
+  if (latestBtc) parts.push('BTC ' + (latestBtc.iv * 100).toFixed(1) + '% (' + latestBtc.daysToExpiry.toFixed(0) + 'д)');
+  if (latestEth) parts.push('ETH ' + (latestEth.iv * 100).toFixed(1) + '% (' + latestEth.daysToExpiry.toFixed(0) + 'д)');
   document.getElementById('ivHeadline').textContent = parts.length ? 'Сейчас: ' + parts.join(' · ') : 'Нет данных пока — iv-logger ещё копит историю';
 
   renderIvChart();
   renderIvLegend();
   renderIvThresholdRows(settingsRes || {});
 }
+
+document.getElementById('ivTenorRow').addEventListener('click', e => {
+  const btn = e.target.closest('.toggle-pill');
+  if (!btn) return;
+  document.querySelectorAll('#ivTenorRow .toggle-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  ivSelectedTenor = btn.dataset.tenor;
+  loadDashboard();
+});
 
 function renderIvLegend() {
   const box = document.getElementById('ivLegend');
