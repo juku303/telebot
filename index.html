@@ -2844,7 +2844,7 @@ async function loadDashboard() {
 
   renderIvChart();
   renderIvLegend();
-  renderIvThresholdRows(settingsRes || {});
+  await renderIvThresholdRows(settingsRes || {});
 }
 
 document.getElementById('ivTenorRow').addEventListener('click', e => {
@@ -2974,40 +2974,65 @@ function attachIvHover(svg, series, x0, x1, xFor) {
   svg.ontouchend = hideHover;
 }
 
-function renderIvThresholdRows(settings) {
+const IV_TENOR_LABELS = { weekly: 'Неделя', monthly: 'Месяц', quarterly: 'Квартал' };
+
+// Порог алерта — по СВОЕМУ горизонту на монету, независимому от того, что
+// сейчас выбрано в переключателе над графиком (пользователь может смотреть
+// недельный график, но настраивать алерт на месячную/квартальную IV — под
+// срок своей реальной позиции). Поэтому каждая строка тянет данные под
+// собственный сохранённый (или ещё не сохранённый, дефолт "неделя") tenor,
+// а не переиспользует ivChartData графика.
+async function renderIvThresholdRows(settings) {
   const box = document.getElementById('ivThresholdRows');
-  box.innerHTML = DASHBOARD_COINS.map(({ coin, color }) => {
+  box.innerHTML = '<div style="color:var(--muted);font-size:12px">Загрузка…</div>';
+
+  const rows = await Promise.all(DASHBOARD_COINS.map(async ({ coin, color }) => {
     const cfg = settings[coin];
-    const points = ivChartData[coin] || [];
-    const latest = points[points.length - 1];
-    const currentIv = latest ? (latest.iv * 100).toFixed(1) : '—';
-    const isBelow = cfg && cfg.lowThreshold != null && latest && latest.iv * 100 < cfg.lowThreshold;
-    return `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-      <span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
-      <span style="width:36px;font-size:13px">${coin}</span>
-      <span style="font-size:12px;color:var(--muted);width:52px">${currentIv}%</span>
-      <input id="ivThreshold-${coin}" type="number" placeholder="порог %" value="${cfg && cfg.lowThreshold != null ? cfg.lowThreshold : ''}"
-        style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px">
-      <button onclick="saveIvThreshold('${coin}')" style="background:var(--accent2);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer">✓</button>
-      ${isBelow ? `<span style="color:var(--red);font-size:11px;font-family:var(--mono)">ниже</span>` : ''}
-    </div>`;
-  }).join('');
+    const tenor = (cfg && cfg.tenor) || 'weekly';
+    let currentIv = '—';
+    try {
+      const r = await apiFetch(API_BASE + '/api/iv-history?coin=' + coin + '&hours=1&tenor=' + tenor);
+      const d = await r.json();
+      const latest = d.points && d.points[d.points.length - 1];
+      if (latest) currentIv = (latest.iv * 100).toFixed(1);
+    } catch (e) { /* оставляем "—" */ }
+    const isBelow = cfg && cfg.lowThreshold != null && currentIv !== '—' && parseFloat(currentIv) < cfg.lowThreshold;
+    return { coin, color, cfg, tenor, currentIv, isBelow };
+  }));
+
+  box.innerHTML = rows.map(({ coin, color, cfg, tenor, currentIv, isBelow }) => `
+    <div style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
+        <span style="width:36px;font-size:13px">${coin}</span>
+        <span style="font-size:12px;color:var(--muted)">${currentIv}%</span>
+        ${isBelow ? `<span style="color:var(--red);font-size:11px;font-family:var(--mono)">ниже порога</span>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding-left:18px">
+        <select id="ivTenorSelect-${coin}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 6px;color:var(--text);font-family:var(--sans);font-size:12px">
+          ${Object.entries(IV_TENOR_LABELS).map(([key, label]) => `<option value="${key}" ${tenor === key ? 'selected' : ''}>${label}</option>`).join('')}
+        </select>
+        <input id="ivThreshold-${coin}" type="number" placeholder="порог %" value="${cfg && cfg.lowThreshold != null ? cfg.lowThreshold : ''}"
+          style="flex:1;min-width:0;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px">
+        <button onclick="saveIvThreshold('${coin}')" style="background:var(--accent2);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;flex-shrink:0">✓</button>
+      </div>
+    </div>`).join('');
 }
 
 async function saveIvThreshold(coin) {
   const input = document.getElementById('ivThreshold-' + coin);
+  const tenor = document.getElementById('ivTenorSelect-' + coin).value;
   const raw = input.value.trim();
   const lowThreshold = raw === '' ? null : parseFloat(raw);
   try {
     const r = await apiFetch(API_BASE + '/api/iv-alert-settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ coin, lowThreshold }),
+      body: JSON.stringify({ coin, lowThreshold, tenor }),
     });
     const d = await r.json();
     if (!r.ok || d.error) { toast('Ошибка: ' + (d.message || d.error)); return; }
-    toast(lowThreshold === null ? `Порог для ${coin} отключён` : `Порог для ${coin} сохранён: ${lowThreshold}%`);
+    toast(lowThreshold === null ? `Порог для ${coin} отключён` : `Порог для ${coin} (${IV_TENOR_LABELS[tenor]}) сохранён: ${lowThreshold}%`);
     loadDashboard();
   } catch (e) {
     toast('Нет связи с сервером: ' + e.message);
