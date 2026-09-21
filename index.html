@@ -3141,12 +3141,19 @@ function toggleNewConstructionForm() {
   }
 }
 
+// Гвард от повторной отправки — реальный случай: двойной тап по кнопке
+// "Создать" на телефоне ушёл двумя отдельными POST-запросами (кнопка не
+// блокировалась на время запроса) и создал две одинаковые конструкции.
+let creatingConstruction = false;
+
 async function createConstruction() {
+  if (creatingConstruction) return;
   const name = document.getElementById('ncName').value.trim();
   const sel = document.getElementById('ncBaseLeg');
   const baseLegSymbol = sel.value;
   const coin = sel.selectedOptions[0] && sel.selectedOptions[0].dataset.coin;
   if (!name || !baseLegSymbol || !coin) { toast('Заполните название и базовую ногу'); return; }
+  creatingConstruction = true;
   try {
     const r = await apiFetch(API_BASE + '/api/constructions', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3160,6 +3167,8 @@ async function createConstruction() {
     loadConstructionsTab();
   } catch (e) {
     toast('Нет связи с сервером: ' + e.message);
+  } finally {
+    creatingConstruction = false;
   }
 }
 
