@@ -580,11 +580,23 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 <!-- ── Профиль (заглушка — содержимое не согласовано) ── -->
 <div class="page" id="page-profile" style="display:none">
-  <div class="wizard-title">Профиль</div>
-  <div class="detail-card" style="text-align:center;padding:50px 20px;color:var(--muted)">
-    <div style="font-size:40px;margin-bottom:10px">👤</div>
-    <div>Раздел в разработке</div>
+  <div class="wizard-title">Конструкция</div>
+  <div class="detail-card">
+    <button class="btn-start" onclick="toggleNewConstructionForm()">+ Новая конструкция</button>
+    <div id="newConstructionForm" style="display:none;margin-top:14px">
+      <div style="margin-bottom:10px">
+        <label style="font-size:12px;color:var(--muted)">Название</label>
+        <input id="ncName" type="text" placeholder="Например: BTC 79000C"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-family:var(--sans);font-size:13px;margin-top:4px;box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:12px;color:var(--muted)">Базовая нога (купленный опцион)</label>
+        <select id="ncBaseLeg" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-family:var(--sans);font-size:13px;margin-top:4px"></select>
+      </div>
+      <button class="btn-start" onclick="createConstruction()">Создать</button>
+    </div>
   </div>
+  <div id="constructionsList"></div>
 </div>
 
 <!-- ── Мастер создания: шаг 1 из 4 — график, направление, диапазон ── -->
@@ -801,8 +813,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div>Боты</div>
   </div>
   <div class="nav-item" id="navProfile" onclick="showTab('profile')">
-    <div class="nav-icon">👤</div>
-    <div>Профиль</div>
+    <div class="nav-icon">🧩</div>
+    <div>Конструкция</div>
   </div>
 </div>
 
@@ -1432,6 +1444,7 @@ function showTab(tab) {
   } else if (tab === 'profile') {
     document.getElementById('page-profile').style.display = 'block';
     document.getElementById('navProfile').classList.add('active');
+    loadConstructionsTab();
   } else if (tab === 'dashboard') {
     document.getElementById('page-dashboard').style.display = 'block';
     document.getElementById('navDashboard').classList.add('active');
@@ -3089,6 +3102,214 @@ async function saveIvThreshold(coin) {
   } catch (e) {
     toast('Нет связи с сервером: ' + e.message);
   }
+}
+
+// ── Вкладка "Конструкция" ────────────────────────────────────────────
+// Кэш опционных позиций и списка ботов — нужен для выпадающих списков
+// (выбор базовой/проданной ноги, привязка бота), обновляется при каждом
+// открытии вкладки вместе с самими конструкциями.
+let constructionOptionPositions = [];
+let constructionBots = [];
+
+async function loadConstructionsTab() {
+  const box = document.getElementById('constructionsList');
+  box.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px 0">Загрузка…</div>';
+  try {
+    const [consRes, optRes, botsRes] = await Promise.all([
+      apiFetch(API_BASE + '/api/constructions').then(r => r.json()),
+      apiFetch(API_BASE + '/api/option-positions').then(r => r.json()),
+      apiFetch(BOTS_API).then(r => r.json()),
+    ]);
+    constructionOptionPositions = optRes.positions || [];
+    constructionBots = Array.isArray(botsRes) ? botsRes : [];
+    renderConstructions(consRes.list || []);
+  } catch (e) {
+    box.innerHTML = `<div style="color:var(--muted);font-size:12px">Нет связи с сервером: ${e.message}</div>`;
+  }
+}
+
+function toggleNewConstructionForm() {
+  const form = document.getElementById('newConstructionForm');
+  const showing = form.style.display !== 'none';
+  form.style.display = showing ? 'none' : 'block';
+  if (!showing) {
+    const sel = document.getElementById('ncBaseLeg');
+    const longLegs = constructionOptionPositions.filter(p => p.side === 'Buy');
+    sel.innerHTML = longLegs.length
+      ? longLegs.map(p => `<option value="${p.symbol}" data-coin="${p.coin}">${p.coin} ${p.strike} ${p.optionType === 'C' ? 'Call' : 'Put'} (куплен)</option>`).join('')
+      : '<option value="">Нет открытых купленных опционов</option>';
+  }
+}
+
+async function createConstruction() {
+  const name = document.getElementById('ncName').value.trim();
+  const sel = document.getElementById('ncBaseLeg');
+  const baseLegSymbol = sel.value;
+  const coin = sel.selectedOptions[0] && sel.selectedOptions[0].dataset.coin;
+  if (!name || !baseLegSymbol || !coin) { toast('Заполните название и базовую ногу'); return; }
+  try {
+    const r = await apiFetch(API_BASE + '/api/constructions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, coin, baseLegSymbol }),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) { toast('Ошибка: ' + (d.message || d.error)); return; }
+    toast('Конструкция создана');
+    document.getElementById('newConstructionForm').style.display = 'none';
+    document.getElementById('ncName').value = '';
+    loadConstructionsTab();
+  } catch (e) {
+    toast('Нет связи с сервером: ' + e.message);
+  }
+}
+
+async function constructionAction(id, action, body) {
+  try {
+    const r = await apiFetch(API_BASE + '/api/constructions/' + id + '/' + action, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) { toast('Ошибка: ' + (d.message || d.error)); return false; }
+    return true;
+  } catch (e) {
+    toast('Нет связи с сервером: ' + e.message);
+    return false;
+  }
+}
+
+async function linkBotToConstruction(id) {
+  const sel = document.getElementById('linkBotSelect-' + id);
+  if (!sel.value) { toast('Выберите бота'); return; }
+  if (await constructionAction(id, 'link-bot', { botId: sel.value })) { toast('Бот привязан'); loadConstructionsTab(); }
+}
+
+async function unlinkBotFromConstruction(id, botId) {
+  if (await constructionAction(id, 'unlink-bot', { botId })) { toast('Бот отвязан'); loadConstructionsTab(); }
+}
+
+async function setShortLegForConstruction(id) {
+  const sel = document.getElementById('shortLegSelect-' + id);
+  if (!sel.value) { toast('Выберите проданный опцион'); return; }
+  if (await constructionAction(id, 'set-short-leg', { symbol: sel.value })) { toast('Проданная нога назначена'); loadConstructionsTab(); }
+}
+
+async function closeShortLegNow(id, symbol) {
+  if (!confirm(`Закрыть ${symbol} по рынку прямо сейчас?`)) return;
+  const r = await constructionAction(id, 'close-short-leg', {});
+  if (r) { toast('Нога закрыта'); loadConstructionsTab(); }
+}
+
+async function saveAutoCloseThreshold(id) {
+  const input = document.getElementById('autoCloseInput-' + id);
+  const raw = input.value.trim();
+  const thresholdPct = raw === '' ? null : parseFloat(raw);
+  if (await constructionAction(id, 'auto-close-threshold', { thresholdPct })) {
+    toast(thresholdPct === null ? 'Автозакрытие отключено' : `Автозакрытие при ${thresholdPct}% включено`);
+    loadConstructionsTab();
+  }
+}
+
+async function deleteConstruction(id) {
+  if (!confirm('Удалить конструкцию? Сами позиции и боты не закроются, удалится только запись отслеживания.')) return;
+  try {
+    const r = await apiFetch(API_BASE + '/api/constructions/' + id, { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok || d.error) { toast('Ошибка: ' + (d.message || d.error)); return; }
+    loadConstructionsTab();
+  } catch (e) {
+    toast('Нет связи с сервером: ' + e.message);
+  }
+}
+
+function renderConstructions(list) {
+  const box = document.getElementById('constructionsList');
+  if (!list.length) {
+    box.innerHTML = '<div class="detail-card" style="text-align:center;padding:40px 20px;color:var(--muted)">Конструкций пока нет</div>';
+    return;
+  }
+
+  box.innerHTML = list.map(c => {
+    if (c.error) {
+      return `<div class="detail-card"><div style="color:var(--red);font-size:12px">${c.name}: ошибка — ${c.error}</div></div>`;
+    }
+    const pct = c.recoupPct;
+    const pctColor = pct >= 100 ? 'var(--accent)' : pct < 0 ? 'var(--red)' : 'var(--text)';
+    const barWidth = Math.max(0, Math.min(100, pct));
+
+    const availableShortLegs = constructionOptionPositions.filter(p => p.side === 'Sell' && p.coin === c.coin && p.symbol !== c.shortLegSymbol);
+    const linkableBots = constructionBots.filter(b => !c.allBotIds.includes(b.id));
+
+    const shortLegBlock = c.shortLeg
+      ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+           <div style="font-size:12px">${c.shortLegSymbol} <span style="color:var(--muted)">P&L: <span class="${c.shortLeg.unrealisedPnl < 0 ? 'sval neg' : ''}" style="font-size:12px">${c.shortLeg.unrealisedPnl >= 0 ? '+' : ''}$${c.shortLeg.unrealisedPnl.toFixed(2)}</span></span></div>
+           <button onclick="closeShortLegNow('${c.id}','${c.shortLegSymbol}')" style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer">Закрыть сейчас</button>
+         </div>`
+      : `<div style="display:flex;gap:8px;margin-top:8px">
+           <select id="shortLegSelect-${c.id}" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px;color:var(--text);font-family:var(--sans);font-size:12px">
+             ${availableShortLegs.length ? availableShortLegs.map(p => `<option value="${p.symbol}">${p.strike} ${p.optionType === 'C' ? 'Call' : 'Put'}</option>`).join('') : '<option value="">Нет открытых проданных опционов</option>'}
+           </select>
+           <button onclick="setShortLegForConstruction('${c.id}')" style="background:var(--accent2);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer">Назначить</button>
+         </div>`;
+
+    const botsBlock = c.allBotIds.map(botId => {
+      const b = constructionBots.find(x => x.id === botId);
+      const label = b ? `${b.symbol} (${b.running ? 'работает' : 'остановлен'})` : botId;
+      const profit = b ? b.totalProfit : null;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-top:4px">
+        <span>${label}${profit != null ? ' — <span class="' + (profit < 0 ? 'sval neg' : '') + '">' + (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2) + '</span>' : ''}</span>
+        <span onclick="unlinkBotFromConstruction('${c.id}','${botId}')" style="color:var(--muted);cursor:pointer;font-size:11px">отвязать</span>
+      </div>`;
+    }).join('');
+
+    const closedLegsBlock = (c.closedShortLegs || []).length
+      ? `<div style="margin-top:8px;font-size:11px;color:var(--muted)">История закрытых ног: ${c.closedShortLegs.map(l => `${l.symbol.split('-')[2]} (${l.realizedPnl >= 0 ? '+' : ''}$${l.realizedPnl.toFixed(2)}${l.reason === 'auto' ? ', авто' : ''})`).join(', ')}</div>`
+      : '';
+
+    return `
+    <div class="detail-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:14px;font-weight:700">${c.name}</div>
+        <span onclick="deleteConstruction('${c.id}')" style="color:var(--muted);cursor:pointer;font-size:16px">×</span>
+      </div>
+
+      <div style="text-align:center;margin-bottom:8px">
+        <div style="font-size:32px;font-weight:700;color:${pctColor}">${pct.toFixed(0)}%</div>
+        <div style="font-size:11px;color:var(--muted)">отбито — $${c.recoupedAmount.toFixed(2)} из $${c.baseCost.toFixed(2)}</div>
+      </div>
+      <div style="background:var(--border);border-radius:6px;height:6px;overflow:hidden;margin-bottom:14px">
+        <div style="background:${pctColor};height:100%;width:${barWidth}%"></div>
+      </div>
+
+      <div style="font-size:12px;color:var(--muted);margin-bottom:2px">Базовая нога</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px">
+        <span>${c.baseLegSymbol}</span>
+        ${c.baseLeg ? `<span class="${c.baseLeg.unrealisedPnl < 0 ? 'sval neg' : ''}">${c.baseLeg.unrealisedPnl >= 0 ? '+' : ''}$${c.baseLeg.unrealisedPnl.toFixed(2)}</span>` : '<span style="color:var(--red)">закрыта?</span>'}
+      </div>
+
+      <div style="font-size:12px;color:var(--muted);margin-bottom:2px">Проданная нога</div>
+      ${shortLegBlock}
+
+      <div style="font-size:12px;color:var(--muted);margin:12px 0 2px">Привязанные боты</div>
+      ${botsBlock || '<div style="font-size:12px;color:var(--muted)">Нет привязанных ботов</div>'}
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <select id="linkBotSelect-${c.id}" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px;color:var(--text);font-family:var(--sans);font-size:12px">
+          ${linkableBots.length ? linkableBots.map(b => `<option value="${b.id}">${b.symbol} (${b.id})</option>`).join('') : '<option value="">Нет доступных ботов</option>'}
+        </select>
+        <button onclick="linkBotToConstruction('${c.id}')" style="background:var(--accent2);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer">Привязать</button>
+      </div>
+
+      <div style="font-size:12px;color:var(--muted);margin:14px 0 6px">Автозакрытие проданной ноги при отбивке, %</div>
+      <div style="display:flex;gap:8px">
+        <input id="autoCloseInput-${c.id}" type="number" placeholder="например 100" value="${c.autoCloseThresholdPct != null ? c.autoCloseThresholdPct : ''}"
+          style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px">
+        <button onclick="saveAutoCloseThreshold('${c.id}')" style="background:var(--accent2);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer">✓</button>
+      </div>
+      ${c.autoCloseThresholdPct != null ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">Включено — закроет проданную ногу по рынку сама при достижении ${c.autoCloseThresholdPct}%</div>` : ''}
+
+      ${closedLegsBlock}
+    </div>`;
+  }).join('');
 }
 
 fetchStatus();
