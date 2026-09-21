@@ -568,6 +568,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   </div>
 
   <div class="detail-card">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Мои опционы</div>
+    <div id="optionPositionsList">Загрузка…</div>
+  </div>
+
+  <div class="detail-card">
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Уведомлять, когда IV входит в зону низкой волатильности</div>
     <div id="ivThresholdRows"></div>
   </div>
@@ -2845,6 +2850,53 @@ async function loadDashboard() {
   renderIvChart();
   renderIvLegend();
   await renderIvThresholdRows(settingsRes || {});
+  loadOptionPositions();
+}
+
+async function loadOptionPositions() {
+  const box = document.getElementById('optionPositionsList');
+  try {
+    const r = await apiFetch(API_BASE + '/api/option-positions');
+    const d = await r.json();
+    if (!r.ok || d.error) { box.innerHTML = `<div style="color:var(--muted);font-size:12px">Ошибка: ${d.message || d.error}</div>`; return; }
+    renderOptionPositions(d.positions || []);
+  } catch (e) {
+    box.innerHTML = `<div style="color:var(--muted);font-size:12px">Нет связи с сервером: ${e.message}</div>`;
+  }
+}
+
+function renderOptionPositions(positions) {
+  const box = document.getElementById('optionPositionsList');
+  if (!positions.length) {
+    box.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px 0">Открытых опционов нет</div>';
+    return;
+  }
+  box.innerHTML = positions.map(p => {
+    const isLong = p.side === 'Buy';
+    const sideLabel = isLong ? 'Long' : 'Short';
+    const typeLabel = p.optionType === 'C' ? 'Call' : 'Put';
+    const expiryStr = p.deliveryTime ? new Date(p.deliveryTime).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
+    const daysLeft = p.deliveryTime ? Math.max(0, (p.deliveryTime - Date.now()) / 86400000) : null;
+    const pnlNeg = p.unrealisedPnl < 0;
+    return `
+    <div style="border-top:1px solid var(--border);padding:14px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div>
+          <span style="font-size:14px;font-weight:700">${p.coin} ${p.strike} ${typeLabel}</span>
+          <span style="font-size:11px;color:var(--muted);margin-left:6px;font-family:var(--mono)">${sideLabel} · ${p.size}</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);text-align:right">до ${expiryStr}${daysLeft != null ? ' (' + daysLeft.toFixed(0) + 'д)' : ''}</div>
+      </div>
+      <div class="sgrid sgrid3">
+        <div class="scard"><div class="sval">$${Math.abs(p.positionValue).toFixed(2)}</div><div class="slbl">Стоимость</div></div>
+        <div class="scard"><div class="sval ${pnlNeg ? 'neg' : ''}">${pnlNeg ? '' : '+'}$${p.unrealisedPnl.toFixed(2)}</div><div class="slbl">P&L</div></div>
+        <div class="scard"><div class="sval">${p.markIv != null ? (p.markIv * 100).toFixed(1) + '%' : '—'}</div><div class="slbl">IV</div></div>
+        <div class="scard"><div class="sval">${p.delta.toFixed(3)}</div><div class="slbl">Delta</div></div>
+        <div class="scard"><div class="sval">${p.theta.toFixed(2)}</div><div class="slbl">Theta/день</div></div>
+        <div class="scard"><div class="sval">${p.vega.toFixed(2)}</div><div class="slbl">Vega</div></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 document.getElementById('ivTenorRow').addEventListener('click', e => {
